@@ -280,8 +280,8 @@ public struct AppProcessEnergyItem: Identifiable, Hashable {
 /// Bộ lọc cho Nhật ký tiêu hao pin
 public enum BatteryDrainFilter: String, CaseIterable, Identifiable {
     case all = "Tất cả"
-    case batteryOnly = "Khi dùng Pin"
-    case sleepOnly = "Khi Sleep / Gập nắp"
+    case batteryOnly = "Dùng Pin"
+    case sleepOnly = "Sleep"
     case highDrain = "Tụt nhanh (>10W)"
 
     public var id: String { rawValue }

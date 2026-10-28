@@ -2,6 +2,18 @@
 
 ## [1.0.1] - 2026-10-28
 
+### [20:07] fix(ui): eliminate sidebar overlay collision and fix text truncation
+- **Sửa triệt để lỗi Sidebar trượt đè lên nội dung (Overlay Drawer) (`DashboardView.swift`)**:
+  - Gắn tường minh `NavigationSplitView(columnVisibility: $columnVisibility)` kết hợp `.navigationSplitViewStyle(.balanced)`.
+  - Khắc phục nguyên nhân gốc: Điều chỉnh độ rộng cột danh sách ứng dụng `topEnergyAppsSection` từ 440px xuống 330px, giải phóng hơn 110px cho bảng lịch sử bên phải và không còn làm phình kích thước vượt ngưỡng cửa sổ khiến macOS ép Sidebar thành lớp nổi đè lên nội dung.
+  - Tăng kích thước cửa sổ tối thiểu lên `1120x750` giúp bố cục luôn phẳng, mở rộng tối đa và không che khuất chữ.
+- **Khắc phục các điểm cắt chữ / tràn giao diện (`DashboardView.swift`, `Models.swift`)**:
+  - Huy hiệu thẻ KPI 4 đổi thành `SMC + pmset` có `.fixedSize()` đảm bảo không bị cắt cụt thành `Soi hơn App`.
+  - Nút reload đổi thành "Làm mới" thay cho "Đọc lại pmset" (tránh bị cắt `Đọc lại pms`).
+  - Tối ưu bộ lọc Segmented Picker: `Tất cả`, `Dùng Pin`, `Sleep`, `Tụt nhanh (>10W)` gọn gàng, chừa không gian cho ô tìm kiếm.
+  - Giới hạn độ rộng thanh trạng thái `topStatusToolbar` không chèn ép các nút hành động.
+- **Tự động đóng gói bản dựng `v1.0.1.2610282014`**: Hoàn tất cập nhật bản chạy mới.
+
 ### [19:46] feat(battery): add realtime app energy watts and battery drain history tab
 - **Soi 'Ma cà rồng hút pin' bằng Watt thực tế (`DashboardView.swift`, `AppState.swift`, `Models.swift`)**:
   - Tính toán và quy đổi % CPU thành công suất tiêu thụ điện Watt (W) thời gian thực cho từng tiến trình/ứng dụng dựa trên Apple Silicon SMC Watts và trạng thái hoạt động.

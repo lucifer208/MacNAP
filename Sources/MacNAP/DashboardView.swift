@@ -4,6 +4,7 @@ import Charts
 public struct DashboardView: View {
     @ObservedObject var state: AppState
     public var onSelectDevice: ((String) -> Void)?
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     public init(state: AppState, onSelectDevice: ((String) -> Void)? = nil) {
         self.state = state
@@ -11,9 +12,9 @@ public struct DashboardView: View {
     }
 
     public var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             sidebarView
-                .navigationSplitViewColumnWidth(min: 265, ideal: 275, max: 295)
+                .navigationSplitViewColumnWidth(min: 250, ideal: 260, max: 275)
         } detail: {
             VStack(spacing: 0) {
                 topStatusToolbar
@@ -38,7 +39,8 @@ public struct DashboardView: View {
             }
             .background(Color(nsColor: .windowBackgroundColor))
         }
-        .frame(minWidth: 1080, minHeight: 750)
+        .navigationSplitViewStyle(.balanced)
+        .frame(minWidth: 1120, minHeight: 750)
         .sheet(isPresented: $state.showUpdateSheet) {
             UpdateSettingsSheetView(state: state)
         }
@@ -308,6 +310,7 @@ public struct DashboardView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
+            .frame(maxWidth: 480, alignment: .leading)
 
             Spacer()
 
@@ -379,7 +382,7 @@ public struct DashboardView: View {
             batteryDrainKpiRow
             HStack(alignment: .top, spacing: 16) {
                 topEnergyAppsSection
-                    .frame(width: 440)
+                    .frame(width: 330)
                 batteryDrainHistorySection
             }
         }
@@ -437,7 +440,7 @@ public struct DashboardView: View {
             kpiCard(
                 title: L.t("NHẬT KÝ TIÊU HAO (CHI TIẾT)", "DETAILED DRAIN HISTORY"),
                 mainValue: L.t("\(state.batteryDrainLogs.count) Sự kiện", "\(state.batteryDrainLogs.count) Events"),
-                badgeText: L.t("Soi hơn Apple", "Beyond Apple"),
+                badgeText: L.t("SMC + pmset", "SMC + pmset"),
                 badgeColor: .cyan,
                 footerLine1: L.t("Ghi nhận từng % pin sụt giảm", "Records every 1% battery drop"),
                 footerLine2: L.t("Phân loại Wake, USB & App ngầm", "Categorized by Wake, USB & Apps"),
@@ -573,7 +576,7 @@ public struct DashboardView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.clockwise")
-                        Text(L.t("Đọc lại pmset", "Reload pmset"))
+                        Text(L.t("Làm mới", "Reload"))
                     }
                     .font(.caption.weight(.medium))
                 }
@@ -661,7 +664,7 @@ public struct DashboardView: View {
 
                                 // State badge
                                 Text(entry.stateLabel)
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(.system(size: 9.5, weight: .medium))
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
                                     .background(
@@ -669,7 +672,7 @@ public struct DashboardView: View {
                                         in: RoundedRectangle(cornerRadius: 4)
                                     )
                                     .foregroundStyle(entry.isSleepEvent ? .indigo : (entry.stateLabel.contains("AC") ? .green : .orange))
-                                    .frame(width: 110, alignment: .leading)
+                                    .frame(width: 95, alignment: .leading)
 
                                 // Culprit / cause
                                 Text(entry.topCulprit)
@@ -832,9 +835,9 @@ public struct DashboardView: View {
                 Spacer(minLength: 4)
 
                 Text(badgeText)
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2.5)
                     .background(badgeColor.opacity(0.16), in: Capsule())
                     .foregroundStyle(badgeColor)
                     .lineLimit(1)
