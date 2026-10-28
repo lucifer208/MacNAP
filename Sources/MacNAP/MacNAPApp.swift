@@ -34,11 +34,11 @@ struct MacNAPApp: App {
 
                 Divider()
 
-                Text(String(format: "Tiêu thụ (Out): %.2f W", state.systemLoadWatts))
-                Text(String(format: "Đang sạc vào (In): %.2f W", state.externalConnected ? state.adapterWatts : 0.0))
-                Text(String(format: "Ngoại vi (Active): %.2f W (Standby: %.2f W)", state.peripheralsTotalWatts, state.peripheralsSleepWatts))
+                Text(String(format: "⚡️ Tiêu thụ (Out): %.2f W", state.systemLoadWatts))
+                Text(String(format: "🔌 Đang sạc vào (In): %.2f W", state.externalConnected ? state.adapterWatts : 0.0))
+                Text(String(format: "🖨️ Ngoại vi (Active): %.2f W (Standby: %.2f W)", state.peripheralsTotalWatts, state.peripheralsSleepWatts))
                 if let s = state.currentSleepSession {
-                    Text(String(format: "Đêm qua (%@): -%d%% (%d DarkWake • TB %.2fW)", s.titleLabel, s.dropPercent, s.darkWakeCount, s.averageDrainWatts))
+                    Text(String(format: "🌙 Đêm qua (%@): -%d%% (%d DarkWake • TB %.2fW)", s.titleLabel, s.dropPercent, s.darkWakeCount, s.averageDrainWatts))
                 }
 
                 Divider()
@@ -92,17 +92,14 @@ struct MacNAPApp: App {
             }
             .padding(10)
         } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "laptopcomputer")
-                Text("Zzz")
-                    .font(.caption2.bold())
-                Text(
-                    state.externalConnected
-                        ? String(format: "↓%.1fW ↑%.1fW", state.systemLoadWatts, state.adapterWatts)
-                        : String(format: "↓%.1fW • Sạc 0W", state.systemLoadWatts)
+            Text(
+                String(
+                    format: "⚡️%.1fW 🔌%.1fW",
+                    state.systemLoadWatts,
+                    state.externalConnected ? state.adapterWatts : 0.0
                 )
-                .font(.caption.monospacedDigit())
-            }
+            )
+            .font(.system(size: 12, weight: .semibold, design: .monospaced))
         }
     }
 }

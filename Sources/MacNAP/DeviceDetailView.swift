@@ -224,3 +224,4 @@ public struct DeviceDetailView: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 }
+
