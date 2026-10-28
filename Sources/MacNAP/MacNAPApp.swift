@@ -6,21 +6,7 @@ struct MacNAPApp: App {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
-        Window("MacNAP — Auto-Unmount & Sleep Aid Watt Profiler", id: "dashboard") {
-            DashboardView(state: state)
-                .onAppear {
-                    state.applyCustomDockIcon()
-                }
-        }
-        .defaultSize(width: 1080, height: 860)
-
-        WindowGroup("Chi tiết thiết bị ngoại vi", id: "device-detail", for: String.self) { $deviceID in
-            if let id = deviceID {
-                DeviceDetailView(state: state, deviceID: id)
-            }
-        }
-        .defaultSize(width: 740, height: 580)
-
+        // Mặc định khi chạy chỉ hiện MenuBarExtra, chỉ mở cửa sổ Dashboard khi người dùng bấm chọn
         MenuBarExtra {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
@@ -43,6 +29,8 @@ struct MacNAPApp: App {
 
                 Divider()
 
+                Toggle("Khởi động cùng máy tính (Login)", isOn: $state.launchAtLogin)
+                Toggle("Ẩn icon trên thanh Dock", isOn: $state.hideDockIcon)
                 Toggle("Tự Unmount khi gập nắp / Sleep", isOn: $state.autoUnmountOnSleep)
                 Toggle("Tự Mount lại ngay khi mở nắp", isOn: $state.autoRemountOnWake)
 
@@ -54,8 +42,9 @@ struct MacNAPApp: App {
 
                 ForEach(state.peripherals.prefix(6)) { dev in
                     Button {
-                        NSApp.activate(ignoringOtherApps: true)
-                        openWindow(id: "device-detail", value: dev.id)
+                        state.showDashboardWindow {
+                            openWindow(id: "device-detail", value: dev.id)
+                        }
                     } label: {
                         HStack {
                             Text(dev.name)
@@ -79,9 +68,10 @@ struct MacNAPApp: App {
                     state.unmountAndSleepMacNow()
                 }
 
-                Button("Mở bảng phân tích chính (Sleep Aid & Charts)") {
-                    NSApp.activate(ignoringOtherApps: true)
-                    openWindow(id: "dashboard")
+                Button("Mở bảng phân tích chuyên sâu (Dashboard)") {
+                    state.showDashboardWindow {
+                        openWindow(id: "dashboard")
+                    }
                 }
 
                 Divider()
@@ -99,5 +89,20 @@ struct MacNAPApp: App {
                 )
             )
         }
+
+        Window("MacNAP — Auto-Unmount & Sleep Aid Watt Profiler", id: "dashboard") {
+            DashboardView(state: state)
+                .onAppear {
+                    state.applyDockVisibilityPolicy()
+                }
+        }
+        .defaultSize(width: 1120, height: 780)
+
+        WindowGroup("Chi tiết thiết bị ngoại vi", id: "device-detail", for: String.self) { $deviceID in
+            if let id = deviceID {
+                DeviceDetailView(state: state, deviceID: id)
+            }
+        }
+        .defaultSize(width: 740, height: 580)
     }
 }

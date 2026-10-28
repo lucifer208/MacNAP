@@ -10,36 +10,123 @@ public struct DashboardView: View {
     }
 
     public var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                headerBar
-                kpiGrid
-                sleepAidTimelineSection
-                chartsGridSection
-                peripheralsSection
-                deepLogsAndAssertionsSection
+        NavigationSplitView {
+            sidebarView
+                .navigationSplitViewColumnWidth(min: 235, ideal: 250, max: 270)
+        } detail: {
+            VStack(spacing: 0) {
+                topStatusToolbar
+                Divider()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        switch state.selectedSection {
+                        case .overview:
+                            overviewContent
+                        case .sleepAid:
+                            sleepAidContent
+                        case .peripherals:
+                            peripheralsContent
+                        case .powerLog:
+                            powerLogContent
+                        }
+                    }
+                    .padding(24)
+                }
             }
-            .padding(20)
+            .background(Color(nsColor: .windowBackgroundColor))
         }
-        .frame(minWidth: 1040, minHeight: 800)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .frame(minWidth: 1060, minHeight: 740)
     }
 
-    private var headerBar: some View {
-        HStack(spacing: 16) {
-            SleepingMacIconView(size: 46)
-
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text("MacNAP — Auto-Unmount & Sleep Aid Watt Profiler")
-                        .font(.title2.bold())
-                    Text("Zzz Guard Active")
-                        .font(.caption.bold())
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Color.indigo.opacity(0.2), in: Capsule())
-                        .foregroundStyle(.indigo)
+    // MARK: - Sidebar Navigation
+    private var sidebarView: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                SleepingMacIconView(size: 40)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("MacNAP")
+                        .font(.title3.bold())
+                    Text("SMC & Sleep Guard")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+
+            List(DashboardSection.allCases, selection: $state.selectedSection) { section in
+                Label(section.rawValue, systemImage: section.icon)
+                    .font(.subheadline.weight(.medium))
+                    .padding(.vertical, 4)
+                    .tag(section)
+            }
+            .listStyle(.sidebar)
+
+            Divider()
+
+            // Live Mini Telemetry & Quick Settings inside Sidebar footer
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Label("System Total", systemImage: "bolt.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Spacer()
+                    Text(String(format: "%.2f W", state.systemLoadWatts))
+                        .font(.caption.monospacedDigit().bold())
+                }
+
+                HStack {
+                    Label("DC In (Adapter)", systemImage: "powerplug.fill")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                    Spacer()
+                    Text(String(format: "%.2f W", state.externalConnected ? state.adapterWatts : 0.0))
+                        .font(.caption.monospacedDigit().bold())
+                }
+
+                HStack {
+                    Label("Pin hiện tại", systemImage: "battery.75percent")
+                        .font(.caption)
+                        .foregroundStyle(.cyan)
+                    Spacer()
+                    Text("\(state.batteryPercent)% (\(state.remainingmAh) mAh)")
+                        .font(.caption.monospacedDigit().bold())
+                }
+
+                Divider()
+
+                Toggle("Khởi động cùng máy", isOn: $state.launchAtLogin)
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .font(.caption)
+
+                Toggle("Ẩn icon trên thanh Dock", isOn: $state.hideDockIcon)
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .font(.caption)
+
+                Toggle("Tự Unmount khi ngủ", isOn: $state.autoUnmountOnSleep)
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .font(.caption)
+
+                Toggle("Tự Mount khi mở nắp", isOn: $state.autoRemountOnWake)
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .font(.caption)
+            }
+            .padding(14)
+            .background(.ultraThinMaterial)
+        }
+    }
+
+    // MARK: - Top Status Action Bar
+    private var topStatusToolbar: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(state.selectedSection.rawValue)
+                    .font(.headline)
                 Text(state.lastActionLog)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -48,21 +135,13 @@ public struct DashboardView: View {
 
             Spacer()
 
-            VStack(alignment: .trailing, spacing: 4) {
-                Toggle("Tự Unmount khi gập nắp / Sleep", isOn: $state.autoUnmountOnSleep)
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                Toggle("Tự Mount lại ngay khi mở nắp", isOn: $state.autoRemountOnWake)
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-            }
-
             Button {
                 state.unmountAllNow()
             } label: {
-                Label("Unmount tất cả", systemImage: "arrow.down.doc.fill")
+                Label("Unmount ổ ngoài", systemImage: "arrow.down.doc.fill")
             }
             .buttonStyle(.bordered)
+            .controlSize(.regular)
 
             Button {
                 state.remountAllNow()
@@ -71,6 +150,7 @@ public struct DashboardView: View {
             }
             .buttonStyle(.bordered)
             .tint(.green)
+            .controlSize(.regular)
 
             Button {
                 state.unmountAndSleepMacNow()
@@ -79,16 +159,51 @@ public struct DashboardView: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(.indigo)
+            .controlSize(.regular)
         }
-        .padding(14)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .padding(.horizontal, 24)
+        .padding(.vertical, 12)
+        .background(.regularMaterial)
     }
 
+    // MARK: - Tab 1: Overview & Realtime SMC
+    private var overviewContent: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            kpiGrid
+            realtimeChartsRow
+            sleepAidCompactPreview
+        }
+    }
+
+    // MARK: - Tab 2: Sleep Aid Full Timeline
+    private var sleepAidContent: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            kpiGrid
+            sleepAidTimelineSection
+        }
+    }
+
+    // MARK: - Tab 3: Peripherals & Auto-Unmount
+    private var peripheralsContent: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            peripheralsSection
+            realtimeBarComparisonCard
+        }
+    }
+
+    // MARK: - Tab 4: Power Log & Assertions
+    private var powerLogContent: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            deepLogsAndAssertionsSection
+        }
+    }
+
+    // MARK: - Shared KPI Cards
     private var kpiGrid: some View {
         let lastSession = state.currentSleepSession
-        return HStack(spacing: 12) {
+        return HStack(spacing: 14) {
             kpiCard(
-                title: "System Total (Công suất tiêu thụ)",
+                title: "System Total (SMC PSTR)",
                 value: String(format: "%.2f W", state.systemLoadWatts),
                 subtitle: String(format: "TB Right: %.2fW • TB Left: %.2fW • Pin: %d%%", state.tbRightWatts, state.tbLeftWatts, state.batteryPercent),
                 icon: "bolt.fill",
@@ -96,23 +211,19 @@ public struct DashboardView: View {
             )
 
             kpiCard(
-                title: "DC In (Công suất nguồn sạc vào)",
+                title: "DC In (SMC PDTR)",
                 value: state.externalConnected
                     ? String(format: "%.2f W", state.adapterWatts)
                     : "0.00 W (Dùng Pin)",
                 subtitle: state.externalConnected
-                    ? String(
-                        format: "Adapter Max %dW • Pin: %.2fW",
-                        state.adapterMaxWatts,
-                        state.batteryNetWatts
-                    )
+                    ? String(format: "Adapter Max %dW • Battery Rail: %.2fW", state.adapterMaxWatts, state.batteryNetWatts)
                     : String(format: "Đang xả từ Pin: -%.2f W", abs(state.batteryNetWatts)),
                 icon: state.externalConnected ? "powerplug.fill" : "battery.75percent",
                 color: .green
             )
 
             kpiCard(
-                title: "Đêm qua (Chưa bật App)",
+                title: "Đêm qua (Từ pmset log thật)",
                 value: lastSession != nil
                     ? "-\(lastSession!.dropPercent)% (\(lastSession!.startBattery)%→\(lastSession!.endBattery)%)"
                     : "-\(state.realLastNightDropPercent)%",
@@ -143,43 +254,158 @@ public struct DashboardView: View {
     }
 
     private func kpiCard(title: String, value: String, subtitle: String, icon: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
+                    .font(.subheadline.bold())
                     .foregroundStyle(color)
+                    .frame(width: 24, height: 24)
+                    .background(color.opacity(0.14), in: RoundedRectangle(cornerRadius: 6))
                 Text(title)
-                    .font(.caption)
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
             }
             Text(value)
-                .font(.system(size: 21, weight: .bold, design: .rounded))
+                .font(.system(size: 23, weight: .bold, design: .rounded).monospacedDigit())
             Text(subtitle)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .padding(16)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
     }
 
-    // MARK: - Sleep Aid Style Interactive Timeline (Theo ngày giờ thực tế từ pmset log, nhấn vào hiện chi tiết)
-    private var sleepAidTimelineSection: some View {
+    private var realtimeChartsRow: some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Label("Biểu đồ AppleSMC Realtime (1.0s): System Total vs DC In", systemImage: "waveform.path.ecg")
+                        .font(.headline)
+                    Spacer()
+                    Text("Chu kỳ 1.0 giây • Khớp 100% cảm biến SMC")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                Chart {
+                    ForEach(state.samples) { sample in
+                        AreaMark(
+                            x: .value("Thời gian", sample.timestamp),
+                            y: .value("Watts", sample.systemLoadWatts)
+                        )
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.orange.opacity(0.28), .orange.opacity(0.02)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+
+                        LineMark(
+                            x: .value("Thời gian", sample.timestamp),
+                            y: .value("System Total (W)", sample.systemLoadWatts),
+                            series: .value("Loại", "System Total")
+                        )
+                        .foregroundStyle(.orange)
+                        .lineStyle(StrokeStyle(lineWidth: 2.5))
+
+                        LineMark(
+                            x: .value("Thời gian", sample.timestamp),
+                            y: .value("DC In (W)", sample.adapterInputWatts),
+                            series: .value("Loại", "DC In")
+                        )
+                        .foregroundStyle(.green)
+                        .lineStyle(StrokeStyle(lineWidth: 2.0, dash: [5, 3]))
+                    }
+                }
+                .chartYAxisLabel("Watts (W)")
+                .frame(height: 210)
+
+                HStack(spacing: 18) {
+                    legendDot(color: .orange, label: String(format: "System Total (PSTR): %.2f W", state.systemLoadWatts))
+                    legendDot(color: .green, label: String(format: "DC In (PDTR): %.2f W", state.externalConnected ? state.adapterWatts : 0.0))
+                    legendDot(color: .cyan, label: String(format: "TB Right: %.2f W • TB Left: %.2f W", state.tbRightWatts, state.tbLeftWatts))
+                }
+                .font(.caption2)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+
+            realtimeBarComparisonCard
+        }
+    }
+
+    private var realtimeBarComparisonCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label("Biểu đồ Phiên Ngủ Thực Tế kiểu Sleep Aid (Trích xuất chuẩn từ pmset log theo ngày giờ)", systemImage: "moon.stars.fill")
+                Label("Công suất từng cổng / thiết bị: Active vs Sau khi Unmount", systemImage: "chart.bar.xaxis")
+                    .font(.headline)
+                Spacer()
+            }
+
+            Chart {
+                ForEach(state.peripherals.prefix(7)) { dev in
+                    BarMark(
+                        x: .value("Watts", dev.watts),
+                        y: .value("Thiết bị", dev.name)
+                    )
+                    .foregroundStyle(.pink)
+                    .position(by: .value("Chế độ", "Đang chạy"))
+                    .annotation(position: .trailing) {
+                        Text(String(format: "%.2fW", dev.watts))
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+
+                    BarMark(
+                        x: .value("Watts", dev.sleepWatts),
+                        y: .value("Thiết bị", dev.name)
+                    )
+                    .foregroundStyle(.indigo.opacity(0.85))
+                    .position(by: .value("Chế độ", "Khi Unmount/Ngủ"))
+                }
+            }
+            .chartXAxisLabel("Watts (W)")
+            .frame(height: 210)
+
+            HStack(spacing: 16) {
+                legendDot(color: .pink, label: "Đang hoạt động (Active)")
+                legendDot(color: .indigo, label: "Sau khi Auto-Unmount (Standby)")
+            }
+            .font(.caption2)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var sleepAidCompactPreview: some View {
+        sleepAidTimelineSection
+    }
+
+    private var sleepAidTimelineSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Biểu đồ Phiên Ngủ Thực Tế kiểu Sleep Aid (Theo ngày giờ thực tế từ pmset log)", systemImage: "moon.stars.fill")
                     .font(.headline)
 
                 Spacer()
 
                 if !state.sleepSessions.isEmpty {
-                    Picker("Chọn phiên ngủ:", selection: $state.selectedSessionID) {
+                    Picker("Phiên ngủ:", selection: $state.selectedSessionID) {
                         ForEach(state.sleepSessions) { session in
                             Text("\(session.titleLabel) (-\(session.dropPercent)% • \(session.darkWakeCount) DarkWake)")
                                 .tag(Optional(session.id))
                         }
                     }
-                    .frame(width: 340)
+                    .frame(width: 330)
                 }
 
                 Button {
@@ -201,13 +427,13 @@ public struct DashboardView: View {
             }
 
             if let session = state.currentSleepSession {
-                HStack(spacing: 14) {
+                HStack(spacing: 16) {
                     Text("Thời gian: **\(session.titleLabel)** (\(String(format: "%.1f giờ", session.durationHours)))")
-                    Text("Đêm qua (Không bật app): **\(session.startBattery)% → \(session.endBattery)% (-\(session.dropPercent)%)**")
+                    Text("Đêm qua (Chưa bật app): **\(session.startBattery)% → \(session.endBattery)% (-\(session.dropPercent)%)**")
                         .foregroundStyle(.red)
-                    Text(String(format: "Dự đoán khi bật Auto-Unmount: **-%0.1f%%** (còn ~%d%%)", state.predictedDropPercentWithAutoUnmount, max(0, session.startBattery - Int(round(state.predictedDropPercentWithAutoUnmount)))))
+                    Text(String(format: "Dự đoán bật Auto-Unmount: **-%0.1f%%** (còn ~%d%%)", state.predictedDropPercentWithAutoUnmount, max(0, session.startBattery - Int(round(state.predictedDropPercentWithAutoUnmount)))))
                         .foregroundStyle(.green)
-                    Text(String(format: "Khi bật Auto-Unmount + Tắt DarkWake: **-%0.1f%%** (còn ~%d%%)", state.predictedDropPercentWithFullGuard, max(0, session.startBattery - Int(round(state.predictedDropPercentWithFullGuard)))))
+                    Text(String(format: "Bật Auto-Unmount + Tắt DarkWake: **-%0.1f%%** (còn ~%d%%)", state.predictedDropPercentWithFullGuard, max(0, session.startBattery - Int(round(state.predictedDropPercentWithFullGuard)))))
                         .foregroundStyle(.mint)
                     Spacer()
                 }
@@ -223,7 +449,6 @@ public struct DashboardView: View {
                         let predictedAutoUnmountPct = Double(session.startBattery) - (progress * state.predictedDropPercentWithAutoUnmount)
                         let predictedFullGuardPct = Double(session.startBattery) - (progress * state.predictedDropPercentWithFullGuard)
 
-                        // Đường % Pin thực tế theo ngày giờ (Chưa dùng app)
                         AreaMark(
                             x: .value("Giờ", ev.timestamp),
                             yStart: .value("Min", minBat),
@@ -245,7 +470,6 @@ public struct DashboardView: View {
                         .foregroundStyle(.cyan)
                         .lineStyle(StrokeStyle(lineWidth: 2.5))
 
-                        // Đường dự đoán % Pin khi bật MacNAP Auto-Unmount
                         LineMark(
                             x: .value("Giờ", ev.timestamp),
                             y: .value("Dự đoán Auto-Unmount (%)", predictedAutoUnmountPct),
@@ -254,7 +478,6 @@ public struct DashboardView: View {
                         .foregroundStyle(.green)
                         .lineStyle(StrokeStyle(lineWidth: 2.2, dash: [6, 3]))
 
-                        // Đường dự đoán % Pin khi bật Auto-Unmount + Tắt DarkWake
                         LineMark(
                             x: .value("Giờ", ev.timestamp),
                             y: .value("Dự đoán Full Guard (%)", predictedFullGuardPct),
@@ -263,7 +486,6 @@ public struct DashboardView: View {
                         .foregroundStyle(.mint)
                         .lineStyle(StrokeStyle(lineWidth: 2.0, dash: [3, 3]))
 
-                        // Các vạch DarkWake / Wake giống hệt Sleep Aid
                         if ev.kind != .sleep {
                             RuleMark(x: .value("Giờ", ev.timestamp))
                                 .foregroundStyle(ev.kind == .darkWake ? Color.orange.opacity(0.75) : Color.red)
@@ -294,7 +516,7 @@ public struct DashboardView: View {
                     }
                 }
                 .chartYAxisLabel("% Pin")
-                .frame(height: 185)
+                .frame(height: 195)
                 .chartOverlay { proxy in
                     GeometryReader { geo in
                         Rectangle()
@@ -316,16 +538,15 @@ public struct DashboardView: View {
 
                 HStack(spacing: 18) {
                     legendDot(color: .cyan, label: "Thực tế đêm qua (-\(session.dropPercent)% • còn \(session.endBattery)%)")
-                    legendDot(color: .green, label: String(format: "Dự đoán khi bật Auto-Unmount ổ ngoài (-%.1f%% • còn ~%d%%)", state.predictedDropPercentWithAutoUnmount, max(0, session.startBattery - Int(round(state.predictedDropPercentWithAutoUnmount)))))
-                    legendDot(color: .mint, label: String(format: "Dự đoán khi bật Auto-Unmount + Tắt DarkWake (-%.1f%% • còn ~%d%%)", state.predictedDropPercentWithFullGuard, max(0, session.startBattery - Int(round(state.predictedDropPercentWithFullGuard)))))
+                    legendDot(color: .green, label: String(format: "Dự đoán bật Auto-Unmount (-%.1f%% • còn ~%d%%)", state.predictedDropPercentWithAutoUnmount, max(0, session.startBattery - Int(round(state.predictedDropPercentWithAutoUnmount)))))
+                    legendDot(color: .mint, label: String(format: "Dự đoán bật Auto-Unmount + Tắt DarkWake (-%.1f%% • còn ~%d%%)", state.predictedDropPercentWithFullGuard, max(0, session.startBattery - Int(round(state.predictedDropPercentWithFullGuard)))))
                     Spacer()
-                    Text("💡 Nhấn vào vạch cam trên biểu đồ để xem chi tiết nguyên nhân thức")
+                    Text("Nhấn vào vạch cam trên biểu đồ để xem chi tiết nguyên nhân thức")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
                 .font(.caption2)
 
-                // Thanh chọn nhanh các mốc DarkWake/Sleep hoặc chi tiết mốc vừa nhấn vào
                 if let ev = state.selectedTimelineEvent {
                     HStack(alignment: .top, spacing: 14) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -360,132 +581,21 @@ public struct DashboardView: View {
                         }
                         Spacer()
                     }
-                    .padding(10)
-                    .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
+                    .padding(12)
+                    .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
                 }
             } else {
-                Text("Đang phân tích dữ liệu phiên ngủ từ pmset log...")
+                Text("Đang phân tích dữ liệu phiên ngủ từ pmset log ở luồng ngầm...")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(14)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .padding(16)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
     }
 
     private var selectedTimelineEventID: UUID? {
         state.selectedTimelineEvent?.id
-    }
-
-    private var chartsGridSection: some View {
-        HStack(spacing: 14) {
-            // Chart 1: Multi-series Realtime Watt Telemetry (Out vs In vs Peripherals)
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Label("Công suất Realtime: Tiêu thụ (W) vs Đang sạc vào (W) vs Ngoại vi", systemImage: "waveform.path.ecg")
-                        .font(.headline)
-                    Spacer()
-                    Text("Cập nhật 2.5s")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-
-                Chart {
-                    ForEach(state.samples) { sample in
-                        AreaMark(
-                            x: .value("Thời gian", sample.timestamp),
-                            y: .value("Watts", sample.systemLoadWatts)
-                        )
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.orange.opacity(0.25), .orange.opacity(0.02)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-
-                        LineMark(
-                            x: .value("Thời gian", sample.timestamp),
-                            y: .value("Tiêu thụ (W)", sample.systemLoadWatts),
-                            series: .value("Loại", "Tiêu thụ")
-                        )
-                        .foregroundStyle(.orange)
-                        .lineStyle(StrokeStyle(lineWidth: 2.5))
-
-                        LineMark(
-                            x: .value("Thời gian", sample.timestamp),
-                            y: .value("Sạc vào (W)", sample.adapterInputWatts),
-                            series: .value("Loại", "Sạc vào")
-                        )
-                        .foregroundStyle(.green)
-                        .lineStyle(StrokeStyle(lineWidth: 2.0, dash: [5, 3]))
-
-                        LineMark(
-                            x: .value("Thời gian", sample.timestamp),
-                            y: .value("Ngoại vi (W)", sample.peripheralsWatts),
-                            series: .value("Loại", "Ngoại vi")
-                        )
-                        .foregroundStyle(.pink)
-                        .lineStyle(StrokeStyle(lineWidth: 2.0))
-                    }
-                }
-                .chartYAxisLabel("Watts (W)")
-                .frame(height: 185)
-
-                HStack(spacing: 16) {
-                    legendDot(color: .orange, label: String(format: "System Total: %.2fW", state.systemLoadWatts))
-                    legendDot(color: .green, label: String(format: "DC In: %.2fW", state.externalConnected ? state.adapterWatts : 0.0))
-                    legendDot(color: .pink, label: String(format: "Ngoại vi: %.2fW", state.peripheralsTotalWatts))
-                }
-                .font(.caption2)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-
-            // Chart 2: Per-device Active Watts vs Unmounted Sleep Watts
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Label("Công suất từng thiết bị: Đang chạy vs Sau khi Auto-Unmount", systemImage: "chart.bar.xaxis")
-                        .font(.headline)
-                    Spacer()
-                }
-
-                Chart {
-                    ForEach(state.peripherals.prefix(7)) { dev in
-                        BarMark(
-                            x: .value("Watts", dev.watts),
-                            y: .value("Thiết bị", dev.name)
-                        )
-                        .foregroundStyle(.pink)
-                        .position(by: .value("Chế độ", "Đang chạy"))
-                        .annotation(position: .trailing) {
-                            Text(String(format: "%.2fW (%dmA)", dev.watts, dev.currentmA))
-                                .font(.caption2.monospacedDigit())
-                                .foregroundStyle(.secondary)
-                        }
-
-                        BarMark(
-                            x: .value("Watts", dev.sleepWatts),
-                            y: .value("Thiết bị", dev.name)
-                        )
-                        .foregroundStyle(.indigo.opacity(0.8))
-                        .position(by: .value("Chế độ", "Khi Unmount/Ngủ"))
-                    }
-                }
-                .chartXAxisLabel("Watts (W)")
-                .frame(height: 185)
-
-                HStack(spacing: 16) {
-                    legendDot(color: .pink, label: "Đang hoạt động (Active)")
-                    legendDot(color: .indigo, label: "Sau khi Auto-Unmount (Standby)")
-                }
-                .font(.caption2)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-        }
     }
 
     private func legendDot(color: Color, label: String) -> some View {
@@ -499,24 +609,25 @@ public struct DashboardView: View {
     }
 
     private var peripheralsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Danh sách thiết bị ngoại vi (Nhấn vào bất kỳ thiết bị nào để mở cửa sổ Chart & Log riêng)", systemImage: "externaldrive.connected.to.line.below.fill")
+                Label("Danh sách thiết bị ngoại vi & Cổng Thunderbolt (Nhấn vào thiết bị để mở cửa sổ Chart & Log riêng)", systemImage: "externaldrive.connected.to.line.below.fill")
                     .font(.headline)
                 Spacer()
                 Button("Quét lại") {
-                    state.refreshAll()
+                    state.refreshAll(forcePartitionScan: true)
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
             }
 
             ForEach(state.peripherals) { dev in
-                HStack(spacing: 12) {
+                HStack(spacing: 14) {
                     Image(systemName: dev.kind.iconName)
                         .font(.title3)
                         .foregroundStyle(dev.canUnmount ? (dev.isMounted ? .pink : .green) : .cyan)
-                        .frame(width: 28)
+                        .frame(width: 34, height: 34)
+                        .background((dev.canUnmount ? Color.pink : Color.cyan).opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
 
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
@@ -528,7 +639,7 @@ public struct DashboardView: View {
                                 .padding(.vertical, 2)
                                 .background(Color.secondary.opacity(0.15), in: Capsule())
                             if dev.canUnmount {
-                                Text(dev.isMounted ? "Đang Mount" : "Đã Unmount (Ngủ)")
+                                Text(dev.isMounted ? "Đang Mount" : "Đã Unmount (Standby)")
                                     .font(.caption2.bold())
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
@@ -536,7 +647,7 @@ public struct DashboardView: View {
                                     .foregroundStyle(dev.isMounted ? .orange : .green)
                             }
                         }
-                        Text("Hãng: \(dev.vendor) • Chuẩn: \(dev.speedDescription) • Dòng thực: \(dev.currentmA)mA (Standby: \(dev.sleepCurrentmA)mA) @ \(String(format: "%.1fV", dev.voltageV))")
+                        Text("Hãng: \(dev.vendor) • Chuẩn: \(dev.speedDescription) • Dòng: \(dev.currentmA)mA (Standby: \(dev.sleepCurrentmA)mA) @ \(String(format: "%.1fV", dev.voltageV))")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -546,7 +657,7 @@ public struct DashboardView: View {
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(String(format: "%.2f W", dev.watts))
                             .font(.system(.body, design: .monospaced).bold())
-                            .foregroundStyle(dev.watts >= 1.2 ? .pink : .primary)
+                            .foregroundStyle(dev.watts >= 2.0 ? .pink : .primary)
                         Text(String(format: "Standby: %.2f W", dev.sleepWatts))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -567,28 +678,28 @@ public struct DashboardView: View {
                         .buttonStyle(.borderedProminent)
                         .tint(dev.isMounted ? .pink : .green)
                         .controlSize(.small)
-                        .frame(width: 90)
+                        .frame(width: 92)
                     } else {
-                        Text("USB Bus")
+                        Text("SMC / USB Bus")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
-                            .frame(width: 90, alignment: .trailing)
+                            .frame(width: 92, alignment: .trailing)
                     }
                 }
-                .padding(10)
-                .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+                .padding(12)
+                .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
                 .contentShape(Rectangle())
                 .onTapGesture {
                     openWindow(id: "device-detail", value: dev.id)
                 }
             }
         }
-        .padding(14)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .padding(16)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
     }
 
     private var deepLogsAndAssertionsSection: some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Image(systemName: "exclamationmark.triangle.fill")
@@ -636,7 +747,7 @@ public struct DashboardView: View {
                 Label("Lịch sử Auto-Unmount / Auto-Remount khi đóng mở nắp", systemImage: "list.bullet.clipboard.fill")
                     .font(.headline)
 
-                ForEach(state.actionHistory.prefix(6)) { log in
+                ForEach(state.actionHistory.prefix(8)) { log in
                     HStack {
                         Circle()
                             .fill(log.success ? Color.green : Color.red)
@@ -658,9 +769,9 @@ public struct DashboardView: View {
                     .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: 6))
                 }
             }
-            .padding(14)
+            .padding(16)
             .frame(maxWidth: .infinity)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
@@ -728,16 +839,16 @@ public struct DashboardView: View {
                                     .foregroundStyle(.secondary)
                                     .lineLimit(2)
                             }
-                            .padding(7)
+                            .padding(8)
                             .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
                         }
                     }
                 }
-                .frame(height: 250)
+                .frame(height: 360)
             }
-            .padding(14)
+            .padding(16)
             .frame(maxWidth: .infinity)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
         }
     }
 

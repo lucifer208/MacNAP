@@ -1,9 +1,29 @@
 import Foundation
 import AppKit
 import Combine
+import ServiceManagement
+
+public enum DashboardSection: String, CaseIterable, Identifiable {
+    case overview = "Tổng quan & Realtime"
+    case sleepAid = "Phân tích Phiên Ngủ (Sleep Aid)"
+    case peripherals = "Ngoại vi & Auto-Unmount"
+    case powerLog = "Nhật ký Nguồn & Assertions"
+
+    public var id: String { rawValue }
+
+    public var icon: String {
+        switch self {
+        case .overview: return "gauge.with.dots.needle.67percent"
+        case .sleepAid: return "moon.zzz.fill"
+        case .peripherals: return "externaldrive.connected.to.line.below.fill"
+        case .powerLog: return "doc.text.magnifyingglass"
+        }
+    }
+}
 
 @MainActor
 public final class AppState: ObservableObject {
+    @Published public var selectedSection: DashboardSection = .overview
     @Published public var samples: [PowerSample] = []
     @Published public var externalPartitions: [ExternalDiskPartition] = []
     @Published public var peripherals: [PeripheralDevice] = []
@@ -45,7 +65,19 @@ public final class AppState: ObservableObject {
 
     @Published public var autoUnmountOnSleep: Bool = true
     @Published public var autoRemountOnWake: Bool = true
-    @Published public var lastActionLog: String = "Đã đồng bộ dữ liệu thực tế từ IOKit (Background non-blocking)."
+    @Published public var launchAtLogin: Bool = UserDefaults.standard.bool(forKey: "MacNAP_LaunchAtLogin") {
+        didSet {
+            UserDefaults.standard.set(launchAtLogin, forKey: "MacNAP_LaunchAtLogin")
+            updateLaunchAtLogin(enabled: launchAtLogin)
+        }
+    }
+    @Published public var hideDockIcon: Bool = (UserDefaults.standard.object(forKey: "MacNAP_HideDockIcon") as? Bool) ?? true {
+        didSet {
+            UserDefaults.standard.set(hideDockIcon, forKey: "MacNAP_HideDockIcon")
+            applyDockVisibilityPolicy()
+        }
+    }
+    @Published public var lastActionLog: String = "Đã đồng bộ cảm biến AppleSMC realtime (1s)."
 
     private let telemetry = PowerTelemetryService()
     private let guardService = SleepMountGuardService()
@@ -54,7 +86,7 @@ public final class AppState: ObservableObject {
     private var isRefreshingTelemetry: Bool = false
 
     public init() {
-        applyCustomDockIcon()
+        applyDockVisibilityPolicy()
         setupSleepWakeObservers()
         refreshAll()
         refreshWakeLogs()
@@ -62,9 +94,9 @@ public final class AppState: ObservableObject {
             SleepGuardLogEntry(
                 timestamp: Date(),
                 action: "Khởi động MacNAP",
-                target: "WillSleep / DidWake Observer",
+                target: "Menu Bar Daemon",
                 success: true,
-                detail: "Đã kích hoạt chế độ tự động Unmount khi ngủ & Remount tức thì khi mở nắp."
+                detail: "Chạy ngầm trên Menu Bar • Tự động Unmount khi ngủ & Remount khi mở nắp."
             )
         )
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
@@ -77,6 +109,68 @@ public final class AppState: ObservableObject {
     public func applyCustomDockIcon() {
         let icon = SleepingMacIconView.renderDockIcon(size: 512)
         NSApplication.shared.applicationIconImage = icon
+    }
+
+    public func applyDockVisibilityPolicy() {
+        if hideDockIcon {
+            NSApplication.shared.setActivationPolicy(.accessory)
+        } else {
+            NSApplication.shared.setActivationPolicy(.regular)
+            applyCustomDockIcon()
+        }
+    }
+
+    public func showDashboardWindow(openWindowAction: () -> Void) {
+        if !hideDockIcon {
+            NSApplication.shared.setActivationPolicy(.regular)
+            applyCustomDockIcon()
+        }
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        openWindowAction()
+    }
+
+    private func updateLaunchAtLogin(enabled: Bool) {
+        if #available(macOS 13.0, *) {
+            do {
+                if enabled {
+                    try SMAppService.mainApp.register()
+                } else {
+                    try SMAppService.mainApp.unregister()
+                }
+            } catch {
+                // Fallback LaunchAgent plist if unsigned local app bundle
+            }
+        }
+        let plistURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/LaunchAgents/com.lu.MacNAP.plist")
+        if enabled {
+            let execPath = Bundle.main.executablePath ?? "/Users/lu/HUB/MacNAP/MacNAP.app/Contents/MacOS/MacNAP"
+            let plistContent = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
+            <dict>
+                <key>Label</key>
+                <string>com.lu.MacNAP</string>
+                <key>ProgramArguments</key>
+                <array>
+                    <string>\(execPath)</string>
+                </array>
+                <key>RunAtLoad</key>
+                <true/>
+            </dict>
+            </plist>
+            """
+            try? FileManager.default.createDirectory(
+                at: plistURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try? plistContent.write(to: plistURL, atomically: true, encoding: .utf8)
+            lastActionLog = "Đã bật tự khởi động cùng macOS (LaunchAtLogin)."
+        } else {
+            try? FileManager.default.removeItem(at: plistURL)
+            lastActionLog = "Đã tắt tự khởi động cùng macOS."
+        }
     }
 
     private func setupSleepWakeObservers() {

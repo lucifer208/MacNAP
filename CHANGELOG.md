@@ -2,6 +2,18 @@
 
 ## [Unreleased] - 2026-10-28
 
+### [10:50] feat: Launch at Login, Hide Dock Icon toggle, MenuBar-only startup & NavigationSplitView UI redesign
+- **Khởi động cùng máy & Chạy ngầm chỉ hiện trên Menu Bar**:
+  - Thêm nút **"Khởi động cùng máy tính (Login)"** (`SMAppService` + fallback `~/Library/LaunchAgents/com.lu.MacNAP.plist`).
+  - Thêm nút **"Ẩn icon trên thanh Dock"** (`NSApplication.shared.setActivationPolicy(.accessory)` vs `.regular`).
+  - Khi mới mở app, chỉ hiện thông tin realtime trên thanh Menu Bar (`defaultLaunchBehavior(.suppressed)` + `LSUIElement`). Khi người dùng bấm **"Mở bảng phân tích chuyên sâu (Dashboard)"** mới mở cửa sổ.
+- **Thiết kế lại toàn bộ giao diện (`DashboardView.swift`)**:
+  - Chuyển từ cuộn dọc dài sang kiến trúc **`NavigationSplitView` 2 cột chuẩn macOS** với Sidebar điều hướng 4 phân khu độc lập:
+    1. **Tổng quan & Realtime**: KPI Cards + Biểu đồ AppleSMC 1.0s + Xem nhanh Sleep Aid.
+    2. **Phân tích Phiên Ngủ (Sleep Aid)**: Biểu đồ tương tác theo ngày giờ thực tế từ `pmset log` + 2 đường dự đoán `%` pin tiết kiệm được.
+    3. **Ngoại vi & Auto-Unmount**: Quản lý từng thiết bị + cổng Thunderbolt SMC Live + mở cửa sổ Chart & Log riêng.
+    4. **Nhật ký Nguồn & Assertions**: Bảng lọc `pmset Power Log` & lịch sử đóng/mở nắp.
+
 ### [10:45] feat: direct AppleSMC 1s realtime reader (PSTR, PDTR, PTRL, PTRR), restore colorful App/Dashboard icons & enlarge Menu Bar font
 - **Đọc trực tiếp phần cứng `AppleSMC` chuẩn 100% như app Stats (`SMCReader.swift`)**:
   - Đọc trực tiếp các key cảm biến SMC mỗi **1.0 giây** (realtime): `PSTR` (`System Total`), `PDTR` (`DC In`), `PTRL` (`Thunderbolt Left`), `PTRR` (`Thunderbolt Right`), `PPBR` (`Battery Power`). Không còn bị trễ 30–60 giây như `AppleSmartBattery`.
