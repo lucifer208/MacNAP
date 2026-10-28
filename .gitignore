@@ -1,0 +1,4 @@
+.build/
+.swiftpm/
+MacNAP.app/
+.DS_Store
