@@ -30,6 +30,8 @@ public final class AppState: ObservableObject {
     @Published public var batteryNetWatts: Double = 0.0
     @Published public var chargingIntoBatteryWatts: Double = 0.0
     @Published public var adapterWatts: Double = 0.0
+    @Published public var tbLeftWatts: Double = 0.0
+    @Published public var tbRightWatts: Double = 0.0
     @Published public var adapterMaxWatts: Int = 100
     @Published public var peripheralsTotalWatts: Double = 0.0
     @Published public var peripheralsSleepWatts: Double = 0.0
@@ -65,7 +67,7 @@ public final class AppState: ObservableObject {
                 detail: "Đã kích hoạt chế độ tự động Unmount khi ngủ & Remount tức thì khi mở nắp."
             )
         )
-        timer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.refreshAll()
             }
@@ -163,7 +165,7 @@ public final class AppState: ObservableObject {
         isRefreshingTelemetry = true
         tickCount += 1
 
-        let shouldScanDisksAndAssertions = forcePartitionScan || externalPartitions.isEmpty || (tickCount % 5 == 0)
+        let shouldScanDisksAndAssertions = forcePartitionScan || externalPartitions.isEmpty || (tickCount % 12 == 0)
         let cachedParts = externalPartitions
         let cachedAssertions = assertions
         let telemetryRef = telemetry
@@ -191,6 +193,8 @@ public final class AppState: ObservableObject {
             self.batteryNetWatts = p.batteryNetW
             self.chargingIntoBatteryWatts = max(0.0, p.batteryNetW)
             self.adapterWatts = p.dcInW
+            self.tbLeftWatts = p.tbLeftW
+            self.tbRightWatts = p.tbRightW
             self.adapterMaxWatts = p.adapterMaxWatts
             self.peripherals = scannedPeripherals
             self.peripheralsTotalWatts = periphW

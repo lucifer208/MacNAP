@@ -2,6 +2,13 @@
 
 ## [Unreleased] - 2026-10-28
 
+### [10:45] feat: direct AppleSMC 1s realtime reader (PSTR, PDTR, PTRL, PTRR), restore colorful App/Dashboard icons & enlarge Menu Bar font
+- **Đọc trực tiếp phần cứng `AppleSMC` chuẩn 100% như app Stats (`SMCReader.swift`)**:
+  - Đọc trực tiếp các key cảm biến SMC mỗi **1.0 giây** (realtime): `PSTR` (`System Total`), `PDTR` (`DC In`), `PTRL` (`Thunderbolt Left`), `PTRR` (`Thunderbolt Right`), `PPBR` (`Battery Power`). Không còn bị trễ 30–60 giây như `AppleSmartBattery`.
+- **Trả lại màu sắc cho App Icon (Dock) và các icon trong Dashboard**:
+  - Khôi phục bộ màu Indigo + Cyan + Yellow `Zzz` cho `AppIcon.icns`, Header và các thẻ KPI/danh sách thiết bị trong cửa sổ chính.
+  - Chỉ giữ **Monochrome SF Symbols** cho 2 icon tia sét (`bolt.fill`) và phích cắm (`powerplug.fill`) trên thanh Menu Bar, đồng thời tăng cỡ chữ Menu Bar lên chuẩn macOS (`13.5pt semibold`, icon `14pt`).
+
 ### [10:40] fix: move all pmset & diskutil subprocesses off MainActor to eliminate UI freeze
 - **Triệt tiêu hoàn toàn hiện tượng đơ/freeze app khi đọc `pmset` & `diskutil` (`AppState.swift` & `SleepMountGuardService.swift`)**:
   - Đưa toàn bộ lệnh `pmset -g log`, `pmset -g assertions`, `diskutil list -plist` và `diskutil mount/unmount` sang `Task.detached(priority: .utility)` chạy ngầm ngoài luồng giao diện (`@MainActor`).

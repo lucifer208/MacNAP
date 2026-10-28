@@ -24,7 +24,7 @@ struct MacNAPApp: App {
         MenuBarExtra {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
-                    Image(systemName: "laptopcomputer")
+                    SleepingMacIconView(size: 24)
                     Text("MacNAP Zzz Guard")
                         .font(.headline)
                     Spacer()
@@ -34,9 +34,9 @@ struct MacNAPApp: App {
 
                 Divider()
 
-                Text(String(format: "System Total (Tiêu thụ): %.2f W", state.systemLoadWatts))
-                Text(String(format: "DC In (Nguồn sạc vào): %.2f W", state.externalConnected ? state.adapterWatts : 0.0))
-                Text(String(format: "Ngoại vi (Active): %.2f W (Standby: %.2f W)", state.peripheralsTotalWatts, state.peripheralsSleepWatts))
+                Text(String(format: "System Total (PSTR): %.2f W", state.systemLoadWatts))
+                Text(String(format: "DC In (PDTR): %.2f W", state.externalConnected ? state.adapterWatts : 0.0))
+                Text(String(format: "Thunderbolt Right: %.2f W • Left: %.2f W", state.tbRightWatts, state.tbLeftWatts))
                 if let s = state.currentSleepSession {
                     Text(String(format: "Đêm qua: -%d%% • Dự đoán dùng App: -%.1f%% → -%.1f%%", s.dropPercent, state.predictedDropPercentWithFullGuard, state.predictedDropPercentWithAutoUnmount))
                 }

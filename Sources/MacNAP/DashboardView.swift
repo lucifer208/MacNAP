@@ -90,8 +90,9 @@ public struct DashboardView: View {
             kpiCard(
                 title: "System Total (Công suất tiêu thụ)",
                 value: String(format: "%.2f W", state.systemLoadWatts),
-                subtitle: String(format: "Core: %.2fW • Ngoại vi: %.2fW • Pin: %d%%", state.cpuCoreWatts, state.peripheralsTotalWatts, state.batteryPercent),
-                icon: "bolt.fill"
+                subtitle: String(format: "TB Right: %.2fW • TB Left: %.2fW • Pin: %d%%", state.tbRightWatts, state.tbLeftWatts, state.batteryPercent),
+                icon: "bolt.fill",
+                color: .orange
             )
 
             kpiCard(
@@ -101,12 +102,13 @@ public struct DashboardView: View {
                     : "0.00 W (Dùng Pin)",
                 subtitle: state.externalConnected
                     ? String(
-                        format: "Adapter Max %dW • Pin: %@",
+                        format: "Adapter Max %dW • Pin: %.2fW",
                         state.adapterMaxWatts,
-                        state.chargingIntoBatteryWatts > 0.05 ? String(format: "Đang nạp +%.1fW", state.chargingIntoBatteryWatts) : "Bypass (Giữ Pin)"
+                        state.batteryNetWatts
                     )
                     : String(format: "Đang xả từ Pin: -%.2f W", abs(state.batteryNetWatts)),
-                icon: state.externalConnected ? "powerplug.fill" : "battery.75percent"
+                icon: state.externalConnected ? "powerplug.fill" : "battery.75percent",
+                color: .green
             )
 
             kpiCard(
@@ -117,7 +119,8 @@ public struct DashboardView: View {
                 subtitle: lastSession != nil
                     ? String(format: "%.1fh ngủ • %d DarkWake • Rò %.2f W", lastSession!.durationHours, lastSession!.darkWakeCount, lastSession!.averageDrainWatts)
                     : "Đọc chuẩn từ pmset -g log",
-                icon: "bed.double.fill"
+                icon: "bed.double.fill",
+                color: .red
             )
 
             kpiCard(
@@ -133,16 +136,17 @@ public struct DashboardView: View {
                     max(1, state.realLastNightDropPercent - Int(round(state.predictedDropPercentWithFullGuard))),
                     max(0, 100 - Int(round(state.predictedDropPercentWithFullGuard)))
                 ),
-                icon: "sparkles"
+                icon: "sparkles",
+                color: .cyan
             )
         }
     }
 
-    private func kpiCard(title: String, value: String, subtitle: String, icon: String) -> some View {
+    private func kpiCard(title: String, value: String, subtitle: String, icon: String, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(color)
                 Text(title)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -511,7 +515,7 @@ public struct DashboardView: View {
                 HStack(spacing: 12) {
                     Image(systemName: dev.kind.iconName)
                         .font(.title3)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(dev.canUnmount ? (dev.isMounted ? .pink : .green) : .cyan)
                         .frame(width: 28)
 
                     VStack(alignment: .leading, spacing: 3) {
@@ -588,7 +592,7 @@ public struct DashboardView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.yellow)
                     Text("Tiến trình giữ máy thức (Assertions & Watt hao phí)")
                         .font(.headline)
                     Spacer()
@@ -661,7 +665,7 @@ public struct DashboardView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Image(systemName: "doc.text.magnifyingglass")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.cyan)
                     Text("Nhật ký Nguồn chi tiết (pmset Power Log)")
                         .font(.headline)
                     Spacer()

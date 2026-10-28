@@ -8,6 +8,8 @@ public final class PowerTelemetryService {
         systemTotalW: Double,
         dcInW: Double,
         batteryNetW: Double,
+        tbLeftW: Double,
+        tbRightW: Double,
         adapterMaxWatts: Int,
         voltageV: Double,
         amperagemA: Int,
@@ -17,23 +19,31 @@ public final class PowerTelemetryService {
         remainingmAh: Int,
         fullChargemAh: Int
     ) {
+        let smc = SMCReader.shared
+        // Đọc trực tiếp từ AppleSMC (chuẩn 100% như app Stats)
+        let smcPSTR = smc.readFloat("PSTR") // System Total (W)
+        let smcPDTR = smc.readFloat("PDTR") // DC In (W)
+        let smcPTRL = smc.readFloat("PTRL") ?? 0.0 // Thunderbolt Left (W)
+        let smcPTRR = smc.readFloat("PTRR") ?? 0.0 // Thunderbolt Right (W)
+        let smcPPBR = smc.readFloat("PPBR") // Battery Power (W)
+
         let matching = IOServiceMatching("AppleSmartBattery")
         var iterator: io_iterator_t = 0
         guard IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) == KERN_SUCCESS else {
-            return (0, 0, 0, 0, 12.0, 0, 100, false, false, 0, 0)
+            return (smcPSTR ?? 0, smcPDTR ?? 0, smcPPBR ?? 0, smcPTRL, smcPTRR, 0, 12.0, 0, 100, false, false, 0, 0)
         }
         defer { IOObjectRelease(iterator) }
 
         let service = IOIteratorNext(iterator)
         guard service != 0 else {
-            return (0, 0, 0, 0, 12.0, 0, 100, false, false, 0, 0)
+            return (smcPSTR ?? 0, smcPDTR ?? 0, smcPPBR ?? 0, smcPTRL, smcPTRR, 0, 12.0, 0, 100, false, false, 0, 0)
         }
         defer { IOObjectRelease(service) }
 
         var propsRef: Unmanaged<CFMutableDictionary>?
         guard IORegistryEntryCreateCFProperties(service, &propsRef, kCFAllocatorDefault, 0) == KERN_SUCCESS,
               let props = propsRef?.takeRetainedValue() as? [String: Any] else {
-            return (0, 0, 0, 0, 12.0, 0, 100, false, false, 0, 0)
+            return (smcPSTR ?? 0, smcPDTR ?? 0, smcPPBR ?? 0, smcPTRL, smcPTRR, 0, 12.0, 0, 100, false, false, 0, 0)
         }
 
         let voltageMV = (props["Voltage"] as? Int) ?? 12000
@@ -48,33 +58,31 @@ public final class PowerTelemetryService {
             adapterMaxWatts = (adapterDetails["Watts"] as? Int) ?? 0
         }
 
-        var batteryNetW = (Double(amperage) * voltageV) / 1000.0
-        var systemTotalW = 0.0
-        var dcInW = 0.0
+        var batteryNetW = smcPPBR ?? ((Double(amperage) * voltageV) / 1000.0)
+        var systemTotalW = smcPSTR ?? 0.0
+        var dcInW = smcPDTR ?? 0.0
 
         if let telemetry = props["PowerTelemetryData"] as? [String: Any] {
-            // SystemTotal = SystemEnergyConsumed (mW) hoặc SystemLoad (mW)
-            let energyConsumedMW = (telemetry["SystemEnergyConsumed"] as? Int) ?? 0
             let sysLoadMW = (telemetry["SystemLoad"] as? Int) ?? 0
-
-            // DC In = SystemVoltageIn (mV) * SystemCurrentIn (mA) / 1e6 hoặc SystemPowerIn (mW)
             let vInMV = (telemetry["SystemVoltageIn"] as? Int) ?? 0
             let iInMA = (telemetry["SystemCurrentIn"] as? Int) ?? 0
             let sysPowerInMW = (telemetry["SystemPowerIn"] as? Int) ?? 0
 
-            if vInMV > 0 && iInMA > 0 {
-                dcInW = (Double(vInMV) * Double(iInMA)) / 1_000_000.0
-            } else if sysPowerInMW > 0 {
-                dcInW = Double(sysPowerInMW) / 1000.0
+            if dcInW <= 0.01 {
+                if vInMV > 0 && iInMA > 0 {
+                    dcInW = (Double(vInMV) * Double(iInMA)) / 1_000_000.0
+                } else if sysPowerInMW > 0 {
+                    dcInW = Double(sysPowerInMW) / 1000.0
+                }
             }
 
-            if energyConsumedMW > 0 {
-                systemTotalW = Double(energyConsumedMW) / 1000.0
-            } else if sysLoadMW > 0 {
-                systemTotalW = Double(sysLoadMW) / 1000.0
+            if systemTotalW <= 0.01 {
+                if sysLoadMW > 0 {
+                    systemTotalW = Double(sysLoadMW) / 1000.0
+                }
             }
 
-            if let batPowerMW = telemetry["BatteryPower"] as? Int, batPowerMW != 0, batteryNetW == 0 {
+            if let batPowerMW = telemetry["BatteryPower"] as? Int, batPowerMW != 0, abs(batteryNetW) < 0.01 {
                 batteryNetW = Double(batPowerMW) / 1000.0
             }
         }
@@ -82,7 +90,7 @@ public final class PowerTelemetryService {
         if !externalConnected {
             dcInW = 0.0
         }
-        if systemTotalW == 0 {
+        if systemTotalW <= 0.01 {
             systemTotalW = abs(batteryNetW) > 0 ? abs(batteryNetW) : dcInW
         }
 
@@ -97,6 +105,8 @@ public final class PowerTelemetryService {
             systemTotalW: systemTotalW,
             dcInW: dcInW,
             batteryNetW: batteryNetW,
+            tbLeftW: max(0.0, smcPTRL),
+            tbRightW: max(0.0, smcPTRR),
             adapterMaxWatts: adapterMaxWatts,
             voltageV: voltageV,
             amperagemA: amperage,
@@ -111,6 +121,54 @@ public final class PowerTelemetryService {
     public func scanPeripherals(partitions: [ExternalDiskPartition]) -> [PeripheralDevice] {
         var results: [PeripheralDevice] = []
         var seenIDs = Set<String>()
+
+        let smc = SMCReader.shared
+        let tbLeftW = max(0.0, smc.readFloat("PTRL") ?? 0.0)
+        let tbRightW = max(0.0, smc.readFloat("PTRR") ?? 0.0)
+        let tbLeftI = Int((smc.readFloat("ITRL") ?? (tbLeftW / 12.0)) * 1000.0)
+        let tbRightI = Int((smc.readFloat("ITRR") ?? (tbRightW / 12.0)) * 1000.0)
+
+        if tbRightW > 0.05 {
+            results.append(
+                PeripheralDevice(
+                    id: "smc-tb-right",
+                    name: "Thunderbolt Right Port (SMC Live)",
+                    vendor: "Apple SMC Sensor (PTRR)",
+                    kind: .usbHub,
+                    currentmA: max(10, tbRightI),
+                    sleepCurrentmA: 45,
+                    voltageV: 12.6,
+                    watts: tbRightW,
+                    sleepWatts: 0.45,
+                    canUnmount: false,
+                    bsdName: nil,
+                    parentDisk: nil,
+                    isMounted: true,
+                    speedDescription: "Realtime SMC Power Rail"
+                )
+            )
+        }
+
+        if tbLeftW > 0.05 {
+            results.append(
+                PeripheralDevice(
+                    id: "smc-tb-left",
+                    name: "Thunderbolt Left Port (SMC Live)",
+                    vendor: "Apple SMC Sensor (PTRL)",
+                    kind: .usbHub,
+                    currentmA: max(10, tbLeftI),
+                    sleepCurrentmA: 30,
+                    voltageV: 12.6,
+                    watts: tbLeftW,
+                    sleepWatts: 0.30,
+                    canUnmount: false,
+                    bsdName: nil,
+                    parentDisk: nil,
+                    isMounted: true,
+                    speedDescription: "Realtime SMC Power Rail"
+                )
+            )
+        }
 
         let matching = IOServiceMatching("IOUSBHostDevice")
         var iterator: io_iterator_t = 0
@@ -159,19 +217,15 @@ public final class PowerTelemetryService {
                     || name.localizedCaseInsensitiveContains("SSD")
                     || name.localizedCaseInsensitiveContains("Disk")
 
-                // Tính dòng thực tế (Active Current mA) thay vì lấy nguyên trần Max Allocation 500mA/896mA
                 let currentmA: Int
-                if isStorage {
-                    // Box NVMe RTL9201 khi đang mount tiêu thụ trung bình ~320mA (1.60W), khi đọc ghi đạt 896mA
-                    currentmA = 320
+                if sinkAlloc > 0 {
+                    currentmA = sinkAlloc
+                } else if isStorage {
+                    currentmA = 896
                 } else if isHub {
-                    // Chip controller mỗi Hub tiêu thụ ~35mA (0.18W)
-                    currentmA = 35
-                } else if sinkAlloc > 0 {
-                    // Bàn phím R98HE / chuột tiêu thụ trung bình ~45% dòng trần đăng ký
-                    currentmA = max(45, Int(Double(sinkAlloc) * 0.35))
+                    currentmA = 120
                 } else {
-                    currentmA = speed >= 3 ? 110 : 50
+                    currentmA = speed >= 3 ? 300 : 100
                 }
 
                 var matchedPart: ExternalDiskPartition?
@@ -185,8 +239,7 @@ public final class PowerTelemetryService {
                 let isMounted = matchedPart?.isMounted ?? false
                 let effectiveCurrentmA: Int
                 if isStorage && !isMounted {
-                    // Khi đã Unmount phân vùng, chip bridge RTL9201 về Deep Standby chỉ ~55mA (0.28W)
-                    effectiveCurrentmA = 55
+                    effectiveCurrentmA = 85
                 } else {
                     effectiveCurrentmA = currentmA
                 }
@@ -195,11 +248,11 @@ public final class PowerTelemetryService {
                 if sleepAlloc > 0 {
                     sleepmA = sleepAlloc
                 } else if isStorage {
-                    sleepmA = isMounted ? 240 : 40
+                    sleepmA = isMounted ? 350 : 45
                 } else if isHub {
-                    sleepmA = 15
+                    sleepmA = 30
                 } else {
-                    sleepmA = max(15, Int(Double(effectiveCurrentmA) * 0.30))
+                    sleepmA = max(20, Int(Double(effectiveCurrentmA) * 0.30))
                 }
 
                 let voltageV = 5.0
@@ -231,8 +284,8 @@ public final class PowerTelemetryService {
         for part in partitions {
             let alreadyAttached = results.contains { $0.bsdName == part.bsdName }
             if !alreadyAttached {
-                let activeMA = part.isMounted ? 320 : 55
-                let sleepMA = part.isMounted ? 240 : 40
+                let activeMA = part.isMounted ? 896 : 85
+                let sleepMA = part.isMounted ? 350 : 45
                 results.append(
                     PeripheralDevice(
                         id: "disk-\(part.bsdName)",

@@ -15,25 +15,25 @@ func drawSleepingMacIcon(size: CGFloat) -> NSImage {
     let rect = CGRect(x: size * 0.04, y: size * 0.04, width: size * 0.92, height: size * 0.92)
     let path = NSBezierPath(roundedRect: rect, xRadius: size * 0.22, yRadius: size * 0.22)
     let grad = NSGradient(colors: [
-        NSColor(calibratedWhite: 0.18, alpha: 1.0),
-        NSColor(calibratedWhite: 0.08, alpha: 1.0)
+        NSColor(calibratedRed: 0.22, green: 0.24, blue: 0.58, alpha: 1.0),
+        NSColor(calibratedRed: 0.08, green: 0.09, blue: 0.25, alpha: 1.0)
     ])
     grad?.draw(in: path, angle: -45)
 
-    NSColor(calibratedWhite: 1.0, alpha: 0.22).setStroke()
+    NSColor(calibratedWhite: 1.0, alpha: 0.18).setStroke()
     path.lineWidth = max(1.5, size * 0.015)
     path.stroke()
 
     let screenRect = CGRect(x: size * 0.20, y: size * 0.30, width: size * 0.60, height: size * 0.38)
     let screenPath = NSBezierPath(roundedRect: screenRect, xRadius: size * 0.05, yRadius: size * 0.05)
-    NSColor(calibratedWhite: 0.95, alpha: 0.95).setStroke()
+    NSColor(calibratedRed: 0.25, green: 0.88, blue: 1.0, alpha: 0.95).setStroke()
     screenPath.lineWidth = max(2.0, size * 0.045)
     screenPath.stroke()
 
     let eyeY = size * 0.48
     let leftEye = NSBezierPath(roundedRect: CGRect(x: size * 0.32, y: eyeY, width: size * 0.12, height: max(2.0, size * 0.04)), xRadius: size * 0.02, yRadius: size * 0.02)
     let rightEye = NSBezierPath(roundedRect: CGRect(x: size * 0.56, y: eyeY, width: size * 0.12, height: max(2.0, size * 0.04)), xRadius: size * 0.02, yRadius: size * 0.02)
-    NSColor(calibratedWhite: 0.95, alpha: 1.0).setFill()
+    NSColor(calibratedRed: 0.25, green: 0.88, blue: 1.0, alpha: 1.0).setFill()
     leftEye.fill()
     rightEye.fill()
 
@@ -44,7 +44,7 @@ func drawSleepingMacIcon(size: CGFloat) -> NSImage {
     let font = NSFont.systemFont(ofSize: size * 0.21, weight: .heavy)
     let attrs: [NSAttributedString.Key: Any] = [
         .font: font,
-        .foregroundColor: NSColor(calibratedWhite: 0.95, alpha: 1.0)
+        .foregroundColor: NSColor(calibratedRed: 1.0, green: 0.86, blue: 0.20, alpha: 1.0)
     ]
     let zzz = NSString(string: "Zzz")
     zzz.draw(at: NSPoint(x: size * 0.48, y: size * 0.68), withAttributes: attrs)
