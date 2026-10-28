@@ -130,3 +130,4 @@ Hoặc quét mã **VietQR** trực tiếp ngay trong ứng dụng tại mục **
 
 Dự án được phân phối dưới giấy phép **MIT License**. Xem chi tiết tại [LICENSE](LICENSE).  
 Phát triển bởi **Huỳnh Tuấn Huy** ([@lucifer208](https://github.com/lucifer208)).
+
