@@ -7,7 +7,6 @@ public final class SleepMountGuardService {
 
     public init() {}
 
-    /// Quét tất cả phân vùng ổ cứng ngoài (cả đang mount lẫn đã unmount) để có thể mount lại ngay khi mở nắp
     public func scanExternalPartitions() -> [ExternalDiskPartition] {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/usr/sbin/diskutil")
@@ -62,7 +61,6 @@ public final class SleepMountGuardService {
         return partitions
     }
 
-    /// Unmount 1 phân vùng (`diskutil unmount [force] diskXsY`) — giữ nguyên kết nối USB để remount tức thì khi mở nắp
     public func unmountPartition(_ bsdName: String, force: Bool = false) -> (success: Bool, message: String) {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/usr/sbin/diskutil")
@@ -87,7 +85,6 @@ public final class SleepMountGuardService {
         }
     }
 
-    /// Mount lại phân vùng ngay lập tức (`diskutil mount diskXsY`)
     public func mountPartition(_ bsdName: String) -> (success: Bool, message: String) {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/usr/sbin/diskutil")
@@ -107,7 +104,6 @@ public final class SleepMountGuardService {
         }
     }
 
-    /// Khi gập nắp / chuẩn bị Sleep: Unmount tất cả phân vùng đang mount và lưu danh sách để tự mount lại khi thức
     public func unmountAllForSleep() -> [SleepGuardLogEntry] {
         let parts = scanExternalPartitions()
         var entries: [SleepGuardLogEntry] = []
@@ -143,7 +139,6 @@ public final class SleepMountGuardService {
         return entries
     }
 
-    /// Khi mở nắp / Wake: Mount lại ngay lập tức các phân vùng đã unmount trước khi ngủ (hoặc toàn bộ ổ ngoài đang chờ)
     public func remountAllOnWake(mountAllExternalIfEmpty: Bool = true) -> [SleepGuardLogEntry] {
         var entries: [SleepGuardLogEntry] = []
         let currentParts = scanExternalPartitions()
@@ -171,6 +166,148 @@ public final class SleepMountGuardService {
         autoUnmountedBySleep.removeAll()
         autoUnmountedParentDisks.removeAll()
         return entries
+    }
+
+    /// Phân tích trực tiếp các phiên ngủ thật từ `pmset -g log` (kiểu Sleep Aid)
+    public func parseRealSleepSessions(totalBatteryWh: Double) -> [SleepSessionSummary] {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        proc.arguments = [
+            "-c",
+            "pmset -g log | grep -E 'Entering Sleep|DarkWake|Wake from|DarkWake to FullWake' | tail -n 350"
+        ]
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = pipe
+
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd HH:mm:ss Z"
+        df.locale = Locale(identifier: "en_US_POSIX")
+
+        let shortDF = DateFormatter()
+        shortDF.dateFormat = "dd/MM HH:mm"
+
+        var parsedEvents: [SleepTimelineEvent] = []
+        do {
+            try proc.run()
+            proc.waitUntilExit()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let output = String(data: data, encoding: .utf8) ?? ""
+
+            for raw in output.components(separatedBy: .newlines) {
+                let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                if line.count < 26 { continue }
+                let dateStr = String(line.prefix(25))
+                guard let date = df.date(from: dateStr) else { continue }
+                let timeOnly = String(dateStr.dropFirst(11).prefix(8))
+                let dateLabel = String(dateStr.prefix(19))
+
+                let kind: SleepEventKind
+                if line.contains("DarkWake to FullWake") || (line.contains("Wake from") && !line.contains("DarkWake")) {
+                    kind = .fullWake
+                } else if line.contains("DarkWake") {
+                    kind = .darkWake
+                } else {
+                    kind = .sleep
+                }
+
+                var charge: Int?
+                if let range = line.range(of: #"Charge:\s*(\d+)%"#, options: .regularExpression) {
+                    let sub = String(line[range])
+                    charge = Int(sub.filter(\.isNumber))
+                }
+                guard let validCharge = charge else { continue }
+
+                var durSecs = 0
+                if let durRange = line.range(of: #"(\d+)\s+secs"#, options: .regularExpression) {
+                    let sub = String(line[durRange])
+                    durSecs = Int(sub.filter(\.isNumber)) ?? 0
+                }
+
+                let usingAC = line.contains("Using AC")
+                var reason = "System Sleep"
+                if let dueRange = line.range(of: #"due to ([^:]+)"#, options: .regularExpression) {
+                    reason = String(line[dueRange]).replacingOccurrences(of: "due to ", with: "").trimmingCharacters(in: .whitespaces)
+                }
+                if line.contains("TCPKeepAlive=active") && !reason.contains("TCPKeepAlive") {
+                    reason += " [TCPKeepAlive=active]"
+                }
+
+                parsedEvents.append(
+                    SleepTimelineEvent(
+                        timestamp: date,
+                        timeLabel: timeOnly,
+                        dateLabel: dateLabel,
+                        kind: kind,
+                        durationSeconds: durSecs,
+                        batteryPercent: validCharge,
+                        usingAC: usingAC,
+                        triggerReason: reason,
+                        rawLine: line
+                    )
+                )
+            }
+        } catch {
+            // ignore
+        }
+
+        // Nhóm các sự kiện liên tiếp thành các Phiên Ngủ (Sleep Session), cắt phiên khi gặp FullWake hoặc khoảng cách > 2.5 giờ
+        var sessions: [[SleepTimelineEvent]] = []
+        var current: [SleepTimelineEvent] = []
+
+        for ev in parsedEvents {
+            if let last = current.last {
+                let gap = ev.timestamp.timeIntervalSince(last.timestamp)
+                if gap > 9000 || (last.kind == .fullWake && ev.kind == .sleep) {
+                    if current.count >= 2 {
+                        sessions.append(current)
+                    }
+                    current = [ev]
+                } else {
+                    current.append(ev)
+                }
+            } else {
+                current.append(ev)
+            }
+        }
+        if current.count >= 2 {
+            sessions.append(current)
+        }
+
+        var summaries: [SleepSessionSummary] = []
+        for group in sessions {
+            guard let first = group.first, let last = group.last else { continue }
+            let hours = max(0.1, last.timestamp.timeIntervalSince(first.timestamp) / 3600.0)
+            let startBat = first.batteryPercent
+            let endBat = last.batteryPercent
+            let drop = max(0, startBat - endBat)
+            let consumedWh = (Double(drop) / 100.0) * totalBatteryWh
+            let avgW = hours > 0.05 ? (consumedWh / hours) : 0.0
+
+            let darkWakes = group.filter { $0.kind == .darkWake }.count
+            let usbWakes = group.filter { $0.rawLine.localizedCaseInsensitiveContains("USB") || $0.rawLine.localizedCaseInsensitiveContains("ATC") }.count
+            let tcpActive = group.contains { $0.rawLine.contains("TCPKeepAlive=active") }
+
+            let title = "\(shortDF.string(from: first.timestamp)) → \(shortDF.string(from: last.timestamp))"
+            summaries.append(
+                SleepSessionSummary(
+                    startTime: first.timestamp,
+                    endTime: last.timestamp,
+                    titleLabel: title,
+                    startBattery: startBat,
+                    endBattery: endBat,
+                    dropPercent: drop,
+                    durationHours: hours,
+                    averageDrainWatts: avgW,
+                    darkWakeCount: darkWakes,
+                    usbWakeCount: usbWakes,
+                    tcpKeepAliveActive: tcpActive,
+                    events: group
+                )
+            )
+        }
+
+        return summaries.reversed()
     }
 
     public func scanSleepAssertions() -> [SleepAssertionItem] {
@@ -212,13 +349,13 @@ public final class SleepMountGuardService {
 
                 let wasteW: Double
                 if procName.contains("coreaudiod") {
-                    wasteW = 1.85
+                    wasteW = 0.85
                 } else if procName.contains("sharingd") {
-                    wasteW = 1.20
+                    wasteW = 0.65
                 } else if isCulprit {
-                    wasteW = 0.95
+                    wasteW = 0.45
                 } else {
-                    wasteW = 0.25
+                    wasteW = 0.15
                 }
 
                 items.append(
@@ -239,7 +376,7 @@ public final class SleepMountGuardService {
         return items
     }
 
-    public func scanDetailedPowerLogEvents(limit: Int = 40) -> [WakeDrainEvent] {
+    public func scanDetailedPowerLogEvents(limit: Int = 55) -> [WakeDrainEvent] {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
         proc.arguments = [
@@ -265,25 +402,27 @@ public final class SleepMountGuardService {
                 let impactW: Double
                 if line.contains("DarkWake") || line.contains("MaintenanceWake") {
                     category = .darkWake
-                    impactW = 6.5
+                    impactW = 4.2
                 } else if line.contains("Wake from") {
                     category = .wake
-                    impactW = 11.2
+                    impactW = 8.5
                 } else if line.contains("Sleep") && !line.contains("Prevent") {
                     category = .sleep
-                    impactW = 0.6
+                    impactW = 2.1
                 } else {
                     category = .assertion
-                    impactW = 2.4
+                    impactW = 1.4
                 }
 
                 var procName = "kernel_powerd"
                 if let pidRange = line.range(of: #"PID\s+\d+\([^)]+\)"#, options: .regularExpression) {
                     procName = String(line[pidRange])
+                } else if line.contains("rtc/SleepService") {
+                    procName = "rtc/SleepService (DarkWake)"
+                } else if line.contains("ATC0.USBWakeup") {
+                    procName = "ATC0.USBWakeup (Ngoại vi USB)"
                 } else if line.contains("TCPKeepAlive") {
                     procName = "WiFi TCPKeepAlive"
-                } else if line.contains("usb") || line.contains("XHC") {
-                    procName = "USB Host Controller"
                 }
 
                 var charge: Int?

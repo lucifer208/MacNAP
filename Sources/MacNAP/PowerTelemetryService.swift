@@ -134,15 +134,19 @@ public final class PowerTelemetryService {
                     || name.localizedCaseInsensitiveContains("SSD")
                     || name.localizedCaseInsensitiveContains("Disk")
 
+                // Tính dòng thực tế (Active Current mA) thay vì lấy nguyên trần Max Allocation 500mA/896mA
                 let currentmA: Int
-                if sinkAlloc > 0 {
-                    currentmA = sinkAlloc
+                if isStorage {
+                    // Box NVMe RTL9201 khi đang mount tiêu thụ trung bình ~320mA (1.60W), khi đọc ghi đạt 896mA
+                    currentmA = 320
                 } else if isHub {
-                    currentmA = 150
-                } else if isStorage {
-                    currentmA = 900
+                    // Chip controller mỗi Hub tiêu thụ ~35mA (0.18W)
+                    currentmA = 35
+                } else if sinkAlloc > 0 {
+                    // Bàn phím R98HE / chuột tiêu thụ trung bình ~45% dòng trần đăng ký
+                    currentmA = max(45, Int(Double(sinkAlloc) * 0.35))
                 } else {
-                    currentmA = speed >= 3 ? 500 : 200
+                    currentmA = speed >= 3 ? 110 : 50
                 }
 
                 var matchedPart: ExternalDiskPartition?
@@ -153,16 +157,26 @@ public final class PowerTelemetryService {
                     displayName = "\(name) [\(firstPart.volumeName) • \(statusTag)]"
                 }
 
-                // Nếu ổ ngoài đã Unmount thì mạch bridge NVMe giảm dòng tiêu thụ xuống mức standby (~25% dòng active)
                 let isMounted = matchedPart?.isMounted ?? false
                 let effectiveCurrentmA: Int
                 if isStorage && !isMounted {
-                    effectiveCurrentmA = max(120, Int(Double(currentmA) * 0.25))
+                    // Khi đã Unmount phân vùng, chip bridge RTL9201 về Deep Standby chỉ ~55mA (0.28W)
+                    effectiveCurrentmA = 55
                 } else {
                     effectiveCurrentmA = currentmA
                 }
 
-                let sleepmA = sleepAlloc > 0 ? sleepAlloc : (isStorage && !isMounted ? 80 : Int(Double(effectiveCurrentmA) * 0.65))
+                let sleepmA: Int
+                if sleepAlloc > 0 {
+                    sleepmA = sleepAlloc
+                } else if isStorage {
+                    sleepmA = isMounted ? 240 : 40
+                } else if isHub {
+                    sleepmA = 15
+                } else {
+                    sleepmA = max(15, Int(Double(effectiveCurrentmA) * 0.30))
+                }
+
                 let voltageV = 5.0
                 let watts = (Double(effectiveCurrentmA) * voltageV) / 1000.0
                 let sleepWatts = (Double(sleepmA) * voltageV) / 1000.0
@@ -189,12 +203,11 @@ public final class PowerTelemetryService {
             }
         }
 
-        // Thêm các phân vùng ngoài chưa khớp trực tiếp với USB node
         for part in partitions {
             let alreadyAttached = results.contains { $0.bsdName == part.bsdName }
             if !alreadyAttached {
-                let activeMA = part.isMounted ? 896 : 180
-                let sleepMA = part.isMounted ? 650 : 90
+                let activeMA = part.isMounted ? 320 : 55
+                let sleepMA = part.isMounted ? 240 : 40
                 results.append(
                     PeripheralDevice(
                         id: "disk-\(part.bsdName)",

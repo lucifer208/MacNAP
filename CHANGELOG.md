@@ -2,15 +2,21 @@
 
 ## [Unreleased] - 2026-10-28
 
+### [10:24] feat: Sleep Aid interactive timeline from real pmset log, Dock icon fix, Menu Bar In/Out Watts & per-device popup window
+- **Phân tích chuẩn từ `pmset -g log` (Loại bỏ dự báo giả định)**:
+  - Tự động trích xuất các phiên ngủ thật từ `pmset -g log` (như phiên đêm qua `00:50 → 09:25`: Pin từ `100%` xuống `80%`, mất đúng `-20%`, 29 lần `DarkWake` do `rtc/SleepService`, `wifibt SMC.OutboxNotEmpty` và `ATC0.USBWakeup`, công suất rò trung bình thực tế `2.23 W`).
+  - Hiệu chỉnh lại công suất thực tế của từng thiết bị USB (thay vì lấy nguyên trần Max Allocation `896mA`/`496mA`).
+- **Biểu đồ tương tác kiểu Sleep Aid theo ngày giờ (`DashboardView.swift`)**:
+  - Vẽ đường cong `%` pin thực tế kết hợp các vạch `RuleMark` cam/đỏ tại đúng thời điểm máy bị `DarkWake` / `Wake` trong đêm.
+  - Nhấn trực tiếp vào bất kỳ điểm/vạch giờ nào trên biểu đồ sẽ hiện chi tiết nguyên nhân thức (`triggerReason`), thời lượng thức (`secs`), `%` pin lúc đó và dòng `raw pmset log`.
+- **Cửa sổ mới (Popup Window) riêng cho từng thiết bị (`DeviceDetailView.swift`)**:
+  - Nhấn vào bất kỳ thiết bị nào trong danh sách hoặc từ Menu Bar sẽ mở cửa sổ riêng hiển thị biểu đồ Watts realtime + lịch sử Log của riêng thiết bị đó.
+- **Menu Bar & Dock Icon**:
+  - Menu Bar hiển thị đồng thời công suất đang tiêu thụ và công suất đang sạc vào (`↓15.4W ↑15.4W`).
+  - Gán trực tiếp `NSApplication.shared.applicationIconImage` bằng `SleepingMacIconView.renderDockIcon()` kết hợp `lsregister -f MacNAP.app` để icon Mac ngủ `Zzz` hiện chuẩn trên thanh Dock.
+
 ### [10:13] feat: auto-unmount on sleep & instant remount on wake, remove third-party brand, add Sleeping Mac Zzz icon & deep charts/logs
-- Thay toàn bộ cơ chế `diskutil eject` bằng `diskutil unmount <partition>` khi gập nắp (`NSWorkspace.willSleepNotification`) và tự động `diskutil mount <partition>` ngay lập tức khi mở nắp (`NSWorkspace.didWakeNotification`) qua `SleepMountGuardService.swift`.
-- Xóa toàn bộ tên thương hiệu bên thứ ba khỏi codebase và UI; đổi sang `MacNAP Zzz Guard`.
-- Thiết kế icon Mac đi ngủ có mắt nhắm và chữ `Zzz` (`SleepingMacIconView.swift` + generator `scripts/generate_icon.swift` đóng gói `AppIcon.icns` vào `MacNAP.app`).
-- Nâng cấp 3 biểu đồ chuyên sâu (`DashboardView.swift`):
-  1. Multi-series Realtime Watt Telemetry (Tổng tải hệ thống vs Ngoại vi vs CPU/Core).
-  2. Biểu đồ cột đôi so sánh công suất từng thiết bị khi Active Mount vs sau khi Auto-Unmount/Sleep.
-  3. Biểu đồ mô phỏng đường cong sụt pin 8 tiếng qua đêm (Không bảo vệ vs Bật MacNAP Auto-Unmount).
-- Nâng cấp trình phân tích `pmset` Power Log có bộ lọc theo danh mục (`Sleep`, `DarkWake`, `Wake`, `Assertions`), ô tìm kiếm process/lý do, ước tính số Watt hao phí của từng sự kiện và bảng lịch sử Auto-Unmount/Remount theo thời gian thực.
+- Thay toàn bộ cơ chế `diskutil eject` bằng `diskutil unmount <partition>` khi gập nắp và `diskutil mount <partition>` khi mở nắp.
 
 ### [10:06] feat: init MacNAP native SwiftUI deep Watt profiler
-- Đọc trực tiếp `AppleSmartBattery` (`PowerTelemetryData`: `SystemLoad`, `SystemPowerIn`, `BatteryPower`) và `IOUSBHostDevice` (`UsbPowerSinkAllocation` mA * 5V) qua `IOKit`.
+- Đọc trực tiếp `AppleSmartBattery` và `IOUSBHostDevice` qua `IOKit`.

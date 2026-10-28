@@ -6,10 +6,20 @@ struct MacNAPApp: App {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
-        Window("MacNAP — Auto-Unmount & Deep Watt Profiler", id: "dashboard") {
+        Window("MacNAP — Auto-Unmount & Sleep Aid Watt Profiler", id: "dashboard") {
             DashboardView(state: state)
+                .onAppear {
+                    state.applyCustomDockIcon()
+                }
         }
-        .defaultSize(width: 1060, height: 820)
+        .defaultSize(width: 1080, height: 860)
+
+        WindowGroup("Chi tiết thiết bị ngoại vi", id: "device-detail", for: String.self) { $deviceID in
+            if let id = deviceID {
+                DeviceDetailView(state: state, deviceID: id)
+            }
+        }
+        .defaultSize(width: 740, height: 580)
 
         MenuBarExtra {
             VStack(alignment: .leading, spacing: 10) {
@@ -24,14 +34,38 @@ struct MacNAPApp: App {
 
                 Divider()
 
-                Text(String(format: "Tổng tải hệ thống: %.2f W", state.systemLoadWatts))
-                Text(String(format: "Ngoại vi (Active): %.2f W (Ngủ: %.2f W)", state.peripheralsTotalWatts, state.peripheralsSleepWatts))
-                Text(String(format: "Hao pin 8h đêm: -%.1f%% (Bật Guard: -%.1f%%)", state.estimatedOvernight8hDrainPercentWithoutGuard, state.estimatedOvernight8hDrainPercentWithGuard))
+                Text(String(format: "Tiêu thụ (Out): %.2f W", state.systemLoadWatts))
+                Text(String(format: "Đang sạc vào (In): %.2f W", state.externalConnected ? state.adapterWatts : 0.0))
+                Text(String(format: "Ngoại vi (Active): %.2f W (Standby: %.2f W)", state.peripheralsTotalWatts, state.peripheralsSleepWatts))
+                if let s = state.currentSleepSession {
+                    Text(String(format: "Đêm qua (%@): -%d%% (%d DarkWake • TB %.2fW)", s.titleLabel, s.dropPercent, s.darkWakeCount, s.averageDrainWatts))
+                }
 
                 Divider()
 
                 Toggle("Tự Unmount khi gập nắp / Sleep", isOn: $state.autoUnmountOnSleep)
                 Toggle("Tự Mount lại ngay khi mở nắp", isOn: $state.autoRemountOnWake)
+
+                Divider()
+
+                Text("Nhấn vào thiết bị để mở cửa sổ Chart & Log:")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+
+                ForEach(state.peripherals.prefix(6)) { dev in
+                    Button {
+                        NSApp.activate(ignoringOtherApps: true)
+                        openWindow(id: "device-detail", value: dev.id)
+                    } label: {
+                        HStack {
+                            Text(dev.name)
+                            Spacer()
+                            Text(String(format: "%.2fW", dev.watts))
+                        }
+                    }
+                }
+
+                Divider()
 
                 Button("Unmount tất cả ổ cứng ngoài ngay") {
                     state.unmountAllNow()
@@ -45,7 +79,7 @@ struct MacNAPApp: App {
                     state.unmountAndSleepMacNow()
                 }
 
-                Button("Mở bảng phân tích chuyên sâu (Charts & Logs)") {
+                Button("Mở bảng phân tích chính (Sleep Aid & Charts)") {
                     NSApp.activate(ignoringOtherApps: true)
                     openWindow(id: "dashboard")
                 }
@@ -62,8 +96,12 @@ struct MacNAPApp: App {
                 Image(systemName: "laptopcomputer")
                 Text("Zzz")
                     .font(.caption2.bold())
-                Text(String(format: "%.1fW", state.systemLoadWatts))
-                    .font(.caption.monospacedDigit())
+                Text(
+                    state.externalConnected
+                        ? String(format: "↓%.1fW ↑%.1fW", state.systemLoadWatts, state.adapterWatts)
+                        : String(format: "↓%.1fW • Sạc 0W", state.systemLoadWatts)
+                )
+                .font(.caption.monospacedDigit())
             }
         }
     }

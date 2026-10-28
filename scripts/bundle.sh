@@ -19,6 +19,8 @@ cat > "$APP_DIR/Info.plist" <<EOF
     <string>MacNAP</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>com.lu.MacNAP</string>
     <key>CFBundleName</key>
@@ -26,7 +28,7 @@ cat > "$APP_DIR/Info.plist" <<EOF
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.1.0</string>
+    <string>1.2.0</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSHighResolutionCapable</key>
@@ -35,4 +37,7 @@ cat > "$APP_DIR/Info.plist" <<EOF
 </plist>
 EOF
 
-echo "Built MacNAP.app with Sleeping Mac Zzz icon successfully."
+touch MacNAP.app
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f MacNAP.app || true
+
+echo "Built MacNAP.app v1.2.0 successfully."
