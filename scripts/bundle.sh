@@ -6,6 +6,10 @@ APP_DIR="MacNAP.app/Contents"
 mkdir -p "$APP_DIR/MacOS" "$APP_DIR/Resources"
 cp .build/release/MacNAP "$APP_DIR/MacOS/MacNAP"
 
+swift scripts/generate_icon.swift
+iconutil -c icns AppIcon.iconset -o "$APP_DIR/Resources/AppIcon.icns"
+rm -rf AppIcon.iconset
+
 cat > "$APP_DIR/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -13,6 +17,8 @@ cat > "$APP_DIR/Info.plist" <<EOF
 <dict>
     <key>CFBundleExecutable</key>
     <string>MacNAP</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>com.lu.MacNAP</string>
     <key>CFBundleName</key>
@@ -20,7 +26,7 @@ cat > "$APP_DIR/Info.plist" <<EOF
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>1.1.0</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSHighResolutionCapable</key>
@@ -29,4 +35,4 @@ cat > "$APP_DIR/Info.plist" <<EOF
 </plist>
 EOF
 
-echo "Built MacNAP.app successfully."
+echo "Built MacNAP.app with Sleeping Mac Zzz icon successfully."

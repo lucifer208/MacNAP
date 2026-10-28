@@ -83,7 +83,7 @@ public final class PowerTelemetryService {
         )
     }
 
-    public func scanPeripherals(mountedDisks: [(bsdName: String, volumeName: String, mediaName: String)]) -> [PeripheralDevice] {
+    public func scanPeripherals(partitions: [ExternalDiskPartition]) -> [PeripheralDevice] {
         var results: [PeripheralDevice] = []
         var seenIDs = Set<String>()
 
@@ -119,6 +119,14 @@ public final class PowerTelemetryService {
                 let sleepAlloc = (props["SleepPowerAlloc"] as? Int) ?? 0
                 let speed = (props["Device Speed"] as? Int) ?? (props["USBSpeed"] as? Int) ?? 1
 
+                let speedText: String
+                switch speed {
+                case 4...: speedText = "USB 3.2 Gen2 (10Gbps)"
+                case 3: speedText = "USB 3.0 / HighSpeed"
+                case 2: speedText = "USB 2.0 (480Mbps)"
+                default: speedText = "USB 1.1 / HID"
+                }
+
                 let isHub = name.localizedCaseInsensitiveContains("Hub")
                 let isStorage = name.localizedCaseInsensitiveContains("Storage")
                     || name.localizedCaseInsensitiveContains("RTL92")
@@ -137,15 +145,27 @@ public final class PowerTelemetryService {
                     currentmA = speed >= 3 ? 500 : 200
                 }
 
-                let voltageV = 5.0
-                let watts = (Double(currentmA) * voltageV) / 1000.0
-
-                var matchedBSD: String?
+                var matchedPart: ExternalDiskPartition?
                 var displayName = name
-                if isStorage, let firstDisk = mountedDisks.first {
-                    matchedBSD = firstDisk.bsdName
-                    displayName = "\(name) (\(firstDisk.volumeName))"
+                if isStorage, let firstPart = partitions.first {
+                    matchedPart = firstPart
+                    let statusTag = firstPart.isMounted ? "Mounted" : "Unmounted (Standby)"
+                    displayName = "\(name) [\(firstPart.volumeName) • \(statusTag)]"
                 }
+
+                // Nếu ổ ngoài đã Unmount thì mạch bridge NVMe giảm dòng tiêu thụ xuống mức standby (~25% dòng active)
+                let isMounted = matchedPart?.isMounted ?? false
+                let effectiveCurrentmA: Int
+                if isStorage && !isMounted {
+                    effectiveCurrentmA = max(120, Int(Double(currentmA) * 0.25))
+                } else {
+                    effectiveCurrentmA = currentmA
+                }
+
+                let sleepmA = sleepAlloc > 0 ? sleepAlloc : (isStorage && !isMounted ? 80 : Int(Double(effectiveCurrentmA) * 0.65))
+                let voltageV = 5.0
+                let watts = (Double(effectiveCurrentmA) * voltageV) / 1000.0
+                let sleepWatts = (Double(sleepmA) * voltageV) / 1000.0
 
                 let kind: PeripheralKind = isStorage ? .externalDrive : (isHub ? .usbHub : .usbDevice)
                 results.append(
@@ -154,35 +174,43 @@ public final class PowerTelemetryService {
                         name: displayName,
                         vendor: vendor,
                         kind: kind,
-                        currentmA: currentmA,
+                        currentmA: effectiveCurrentmA,
+                        sleepCurrentmA: sleepmA,
                         voltageV: voltageV,
                         watts: watts,
+                        sleepWatts: sleepWatts,
                         canUnmount: isStorage,
-                        bsdName: matchedBSD,
-                        isMounted: matchedBSD != nil,
-                        sleepCapable: sleepAlloc > 0 || !isHub
+                        bsdName: matchedPart?.bsdName,
+                        parentDisk: matchedPart?.parentWholeDisk,
+                        isMounted: isMounted,
+                        speedDescription: speedText
                     )
                 )
             }
         }
 
-        // Fallback external disks not matched via USB product name
-        for disk in mountedDisks {
-            let alreadyAttached = results.contains { $0.bsdName == disk.bsdName }
+        // Thêm các phân vùng ngoài chưa khớp trực tiếp với USB node
+        for part in partitions {
+            let alreadyAttached = results.contains { $0.bsdName == part.bsdName }
             if !alreadyAttached {
+                let activeMA = part.isMounted ? 896 : 180
+                let sleepMA = part.isMounted ? 650 : 90
                 results.append(
                     PeripheralDevice(
-                        id: "disk-\(disk.bsdName)",
-                        name: "\(disk.volumeName) (\(disk.bsdName))",
-                        vendor: disk.mediaName,
+                        id: "disk-\(part.bsdName)",
+                        name: "\(part.volumeName) (\(part.bsdName))",
+                        vendor: part.fileSystem,
                         kind: .externalDrive,
-                        currentmA: 896,
+                        currentmA: activeMA,
+                        sleepCurrentmA: sleepMA,
                         voltageV: 5.0,
-                        watts: 4.48,
+                        watts: Double(activeMA) * 5.0 / 1000.0,
+                        sleepWatts: Double(sleepMA) * 5.0 / 1000.0,
                         canUnmount: true,
-                        bsdName: disk.bsdName,
-                        isMounted: true,
-                        sleepCapable: true
+                        bsdName: part.bsdName,
+                        parentDisk: part.parentWholeDisk,
+                        isMounted: part.isMounted,
+                        speedDescription: part.sizeDescription
                     )
                 )
             }

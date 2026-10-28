@@ -6,17 +6,16 @@ struct MacNAPApp: App {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
-        Window("MacNAP — Power & Peripheral Jettison", id: "dashboard") {
+        Window("MacNAP — Auto-Unmount & Deep Watt Profiler", id: "dashboard") {
             DashboardView(state: state)
         }
-        .defaultSize(width: 980, height: 740)
+        .defaultSize(width: 1060, height: 820)
 
         MenuBarExtra {
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Image(systemName: "bolt.shield.fill")
-                        .foregroundStyle(.green)
-                    Text("MacNAP Jettison")
+                HStack(spacing: 8) {
+                    SleepingMacIconView(size: 24)
+                    Text("MacNAP Zzz Guard")
                         .font(.headline)
                     Spacer()
                     Text("\(state.batteryPercent)%")
@@ -25,23 +24,28 @@ struct MacNAPApp: App {
 
                 Divider()
 
-                Text(String(format: "System Load: %.2f W", state.systemLoadWatts))
-                Text(String(format: "Ngoại vi (USB/SSD): %.2f W", state.peripheralsTotalWatts))
-                Text(String(format: "Dự báo rò 8h đêm: -%.1f%%", state.estimatedOvernight8hDrainPercent))
+                Text(String(format: "Tổng tải hệ thống: %.2f W", state.systemLoadWatts))
+                Text(String(format: "Ngoại vi (Active): %.2f W (Ngủ: %.2f W)", state.peripheralsTotalWatts, state.peripheralsSleepWatts))
+                Text(String(format: "Hao pin 8h đêm: -%.1f%% (Bật Guard: -%.1f%%)", state.estimatedOvernight8hDrainPercentWithoutGuard, state.estimatedOvernight8hDrainPercentWithGuard))
 
                 Divider()
 
-                Toggle("Auto-Eject khi gập nắp", isOn: $state.autoEjectOnSleep)
+                Toggle("Tự Unmount khi gập nắp / Sleep", isOn: $state.autoUnmountOnSleep)
+                Toggle("Tự Mount lại ngay khi mở nắp", isOn: $state.autoRemountOnWake)
 
-                Button("Eject tất cả ổ cứng ngoài ngay") {
-                    state.ejectNowAll()
+                Button("Unmount tất cả ổ cứng ngoài ngay") {
+                    state.unmountAllNow()
                 }
 
-                Button("Jettison & Sleep Mac ngay") {
-                    state.jettisonAndSleepMacNow()
+                Button("Mount lại tất cả ổ cứng ngoài ngay") {
+                    state.remountAllNow()
                 }
 
-                Button("Mở bảng phân tích chuyên sâu (Charts)") {
+                Button("Unmount & Đưa Mac đi ngủ ngay (Zzz)") {
+                    state.unmountAndSleepMacNow()
+                }
+
+                Button("Mở bảng phân tích chuyên sâu (Charts & Logs)") {
                     NSApp.activate(ignoringOtherApps: true)
                     openWindow(id: "dashboard")
                 }
@@ -55,8 +59,11 @@ struct MacNAPApp: App {
             .padding(10)
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: "bolt.shield.fill")
+                Image(systemName: "laptopcomputer")
+                Text("Zzz")
+                    .font(.caption2.bold())
                 Text(String(format: "%.1fW", state.systemLoadWatts))
+                    .font(.caption.monospacedDigit())
             }
         }
     }
