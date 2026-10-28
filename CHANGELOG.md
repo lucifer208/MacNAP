@@ -2,6 +2,15 @@
 
 ## [1.0.1] - 2026-10-28
 
+### [21:20] feat(menubar): add stacked 2-line layout mode with top label and bottom watts like Stats app
+- **Hỗ trợ Bố cục 2 dòng xếp chồng (Stacked) chuẩn widget Stats / iStat Menus (`SleepingMacIconView.swift`, `StatusBarController.swift`, `SettingsView.swift`, `AppState.swift`, `Models.swift`)**:
+  - Dòng trên hiển thị nhãn chữ in hoa nhỏ gọn (`USAGE`, `CHG` hoặc text người dùng tự đặt) canh giữa.
+  - Dòng dưới hiển thị số đo Watt bằng font Monospaced số cố định không bị nhảy chữ (`13.3W`, `13.9W`).
+  - Đường ngăn cách thanh mảnh `|` chuẩn sắc nét giữa 2 cột module tương tự ứng dụng Stats.
+  - Tương thích hoàn toàn cả khi *Gộp chung* hoặc *Tách rời* 2 thẻ độc lập để kéo thả trực tiếp bằng phím `⌘`.
+  - Tùy chọn chuyển đổi nhanh giữa *1 dòng ngang (Inline)* và *2 dòng xếp chồng (Stacked)* ngay trong Cài đặt -> Menu Bar.
+- **Tự động đóng gói bản dựng `v1.0.1.2610282129`**: Cập nhật DMG và ZIP.
+
 ### [20:50] feat(menubar): customize menu bar tags, support split ⌘-drag, custom text, font, size, and separator
 - **Tùy biến toàn diện hai thẻ công suất trên Menu Bar macOS (`SleepingMacIconView.swift`, `StatusBarController.swift`, `SettingsView.swift`, `AppState.swift`, `Models.swift`)**:
   - **Tách rời 2 thẻ độc lập hỗ trợ ⌘-kéo thả trực tiếp trên macOS Menu Bar**:

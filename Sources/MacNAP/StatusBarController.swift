@@ -104,6 +104,7 @@ public final class StatusBarController: NSObject {
         let fontDesign = state.menuBarFontDesign
         let fontWeight = state.menuBarFontWeight
         let labelStyle = state.menuBarLabelStyle
+        let layoutMode = state.menuBarLayoutMode
 
         if state.menuBarSplitItems {
             let firstTag = state.menuBarTagOrder.first ?? .usage
@@ -114,6 +115,7 @@ public final class StatusBarController: NSObject {
             primaryStatusItem.button?.image = SleepingMacIconView.renderSingleTagImage(
                 tagType: firstTag,
                 watts: firstWatts,
+                layoutMode: layoutMode,
                 labelStyle: labelStyle,
                 customLabel: firstCustom,
                 fontSize: fontSize,
@@ -126,6 +128,7 @@ public final class StatusBarController: NSObject {
             secondaryStatusItem?.button?.image = SleepingMacIconView.renderSingleTagImage(
                 tagType: secondTag,
                 watts: secondWatts,
+                layoutMode: layoutMode,
                 labelStyle: labelStyle,
                 customLabel: secondCustom,
                 fontSize: fontSize,
@@ -136,6 +139,7 @@ public final class StatusBarController: NSObject {
             primaryStatusItem.button?.image = SleepingMacIconView.renderCombinedMenuBarStatusImage(
                 usageWatts: state.systemLoadWatts,
                 chargeWatts: dcIn,
+                layoutMode: layoutMode,
                 tagOrder: state.menuBarTagOrder,
                 labelStyle: labelStyle,
                 usageText: state.menuBarUsageText,

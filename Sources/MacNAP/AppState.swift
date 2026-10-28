@@ -150,6 +150,19 @@ public final class AppState: ObservableObject {
     }
 
     // MARK: - Menu Bar Customizations
+    @Published public var menuBarLayoutMode: MenuBarLayoutMode = {
+        if let raw = UserDefaults.standard.string(forKey: "MacNAP_MenuBarLayoutMode"),
+           let val = MenuBarLayoutMode(rawValue: raw) {
+            return val
+        }
+        return .inline
+    }() {
+        didSet {
+            UserDefaults.standard.set(menuBarLayoutMode.rawValue, forKey: "MacNAP_MenuBarLayoutMode")
+            menuBarConfigChanged.send()
+        }
+    }
+
     @Published public var menuBarSplitItems: Bool = (UserDefaults.standard.object(forKey: "MacNAP_MenuBarSplitItems") as? Bool) ?? false {
         didSet {
             UserDefaults.standard.set(menuBarSplitItems, forKey: "MacNAP_MenuBarSplitItems")
@@ -255,6 +268,7 @@ public final class AppState: ObservableObject {
     }
 
     public func resetMenuBarDefaults() {
+        menuBarLayoutMode = .inline
         menuBarSplitItems = false
         menuBarTagOrder = [.usage, .charge]
         menuBarLabelStyle = .iconOnly

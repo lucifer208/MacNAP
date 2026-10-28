@@ -321,6 +321,21 @@ public struct BatteryChartHourlySample: Identifiable, Hashable {
 
 // MARK: - Menu Bar Customization Models
 
+/// Bố cục hiển thị trên Menu Bar: 1 dòng ngang hoặc 2 dòng xếp chồng (nhãn trên, giá trị dưới như Stats / iStat Menus)
+public enum MenuBarLayoutMode: String, Codable, CaseIterable, Identifiable {
+    case inline = "inline"       // 1 dòng: ⚡ 13.3W
+    case stacked = "stacked"     // 2 dòng xếp chồng: USAGE / 13.3W (chuẩn Stats app)
+
+    public var id: String { rawValue }
+
+    public func title(language: AppLanguage) -> String {
+        switch self {
+        case .inline: return language == .vi ? "1 dòng ngang (Inline)" : "Single Line (Inline)"
+        case .stacked: return language == .vi ? "2 dòng xếp chồng (Label trên, Watt dưới - Kiểu Stats)" : "Two Lines Stacked (Label Top, Value Bottom)"
+        }
+    }
+}
+
 /// Kiểu thẻ thông số trên Menu Bar
 public enum MenuBarTagType: String, Codable, CaseIterable, Identifiable {
     case usage = "usage"

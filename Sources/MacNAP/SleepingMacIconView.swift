@@ -145,70 +145,137 @@ public struct SleepingMacIconView: View {
     public static func renderSingleTagImage(
         tagType: MenuBarTagType,
         watts: Double,
-        labelStyle: MenuBarLabelStyle,
-        customLabel: String,
+        layoutMode: MenuBarLayoutMode = .inline,
+        labelStyle: MenuBarLabelStyle = .iconOnly,
+        customLabel: String = "",
         fontSize: CGFloat = 13.0,
         fontDesign: MenuBarFontDesign = .monospaced,
         fontWeight: MenuBarFontWeight = .semibold
     ) -> NSImage {
-        let font = resolveFont(size: fontSize, design: fontDesign, weight: fontWeight)
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: NSColor.black
-        ]
-
-        let hasIcon = (labelStyle == .iconOnly || labelStyle == .iconAndText)
-        let hasText = (labelStyle == .textOnly || labelStyle == .iconAndText)
-        let valStr = String(format: "%.1fW", watts)
-        let textContent: String
-        if hasText {
-            let label = customLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? (tagType == .usage ? "usage" : "charge")
-                : customLabel
-            textContent = "\(label) \(valStr)"
-        } else {
-            textContent = valStr
-        }
-
-        let strSize = (textContent as NSString).size(withAttributes: attrs)
-        let iconSize: CGFloat = max(11.0, fontSize * 1.05)
-        let spacing: CGFloat = 3.0
-        let paddingH: CGFloat = 3.0
         let height: CGFloat = 22.0
+        let valStr = String(format: "%.1fW", watts)
 
-        var totalWidth = paddingH * 2 + strSize.width
-        if hasIcon {
-            totalWidth += iconSize + spacing
-        }
-        totalWidth = ceil(totalWidth)
+        if layoutMode == .stacked {
+            // STACKED MODE: Label trên, Số dưới (Chuẩn Stats app)
+            let topFontSize = max(7.5, min(9.0, fontSize * 0.65))
+            let bottomFontSize = max(9.0, min(11.5, fontSize * 0.78))
+            let topFont = resolveFont(size: topFontSize, design: fontDesign, weight: .bold)
+            let bottomFont = resolveFont(size: bottomFontSize, design: .monospaced, weight: fontWeight)
 
-        let img = NSImage(size: NSSize(width: totalWidth, height: height))
-        img.lockFocus()
+            let topAttrs: [NSAttributedString.Key: Any] = [
+                .font: topFont,
+                .foregroundColor: NSColor.black.withAlphaComponent(0.85)
+            ]
+            let bottomAttrs: [NSAttributedString.Key: Any] = [
+                .font: bottomFont,
+                .foregroundColor: NSColor.black
+            ]
 
-        var curX: CGFloat = paddingH
-        let symConfig = NSImage.SymbolConfiguration(pointSize: fontSize, weight: fontWeight.nsWeight)
-        if hasIcon {
-            let symName = (tagType == .usage) ? "bolt.fill" : "powerplug.fill"
-            if let symImg = NSImage(systemSymbolName: symName, accessibilityDescription: nil)?.withSymbolConfiguration(symConfig) {
-                symImg.draw(in: NSRect(x: curX, y: (height - iconSize) / 2.0, width: iconSize, height: iconSize))
+            let defaultLabel = (tagType == .usage) ? "USAGE" : "CHG"
+            let labelText = customLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? defaultLabel
+                : customLabel.uppercased()
+
+            let hasIcon = (labelStyle == .iconOnly || labelStyle == .iconAndText)
+            let hasText = (labelStyle != .iconOnly)
+
+            let topText = hasText ? labelText : ""
+            let topSize = (topText as NSString).size(withAttributes: topAttrs)
+            let bottomSize = (valStr as NSString).size(withAttributes: bottomAttrs)
+
+            let iconSize: CGFloat = max(8.0, topFontSize * 0.95)
+            let iconSpacing: CGFloat = 2.0
+            let topLineWidth = topSize.width + (hasIcon ? (iconSize + iconSpacing) : 0)
+            let colWidth = max(topLineWidth, bottomSize.width)
+
+            let paddingH: CGFloat = 3.0
+            let totalWidth = ceil(paddingH * 2 + colWidth)
+
+            let img = NSImage(size: NSSize(width: totalWidth, height: height))
+            img.lockFocus()
+
+            let curX = paddingH
+            let topX = curX + (colWidth - topLineWidth) / 2.0
+            let bottomX = curX + (colWidth - bottomSize.width) / 2.0
+
+            if hasIcon {
+                let symConfig = NSImage.SymbolConfiguration(pointSize: iconSize, weight: .bold)
+                let symName = (tagType == .usage) ? "bolt.fill" : "powerplug.fill"
+                if let symImg = NSImage(systemSymbolName: symName, accessibilityDescription: nil)?.withSymbolConfiguration(symConfig) {
+                    symImg.draw(in: NSRect(x: topX, y: 12.0, width: iconSize, height: iconSize))
+                }
             }
-            curX += iconSize + spacing
+
+            if hasText {
+                let textDrawX = topX + (hasIcon ? (iconSize + iconSpacing) : 0)
+                (topText as NSString).draw(at: NSPoint(x: textDrawX, y: 11.5), withAttributes: topAttrs)
+            }
+
+            (valStr as NSString).draw(at: NSPoint(x: bottomX, y: 1.5), withAttributes: bottomAttrs)
+
+            img.unlockFocus()
+            img.isTemplate = true
+            return img
+        } else {
+            // INLINE MODE (1 dòng ngang)
+            let font = resolveFont(size: fontSize, design: fontDesign, weight: fontWeight)
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: NSColor.black
+            ]
+
+            let hasIcon = (labelStyle == .iconOnly || labelStyle == .iconAndText)
+            let hasText = (labelStyle == .textOnly || labelStyle == .iconAndText)
+            let textContent: String
+            if hasText {
+                let label = customLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? (tagType == .usage ? "usage" : "charge")
+                    : customLabel
+                textContent = "\(label) \(valStr)"
+            } else {
+                textContent = valStr
+            }
+
+            let strSize = (textContent as NSString).size(withAttributes: attrs)
+            let iconSize: CGFloat = max(11.0, fontSize * 1.05)
+            let spacing: CGFloat = 3.0
+            let paddingH: CGFloat = 3.0
+
+            var totalWidth = paddingH * 2 + strSize.width
+            if hasIcon {
+                totalWidth += iconSize + spacing
+            }
+            totalWidth = ceil(totalWidth)
+
+            let img = NSImage(size: NSSize(width: totalWidth, height: height))
+            img.lockFocus()
+
+            var curX: CGFloat = paddingH
+            let symConfig = NSImage.SymbolConfiguration(pointSize: fontSize, weight: fontWeight.nsWeight)
+            if hasIcon {
+                let symName = (tagType == .usage) ? "bolt.fill" : "powerplug.fill"
+                if let symImg = NSImage(systemSymbolName: symName, accessibilityDescription: nil)?.withSymbolConfiguration(symConfig) {
+                    symImg.draw(in: NSRect(x: curX, y: (height - iconSize) / 2.0, width: iconSize, height: iconSize))
+                }
+                curX += iconSize + spacing
+            }
+
+            (textContent as NSString).draw(
+                at: NSPoint(x: curX, y: (height - strSize.height) / 2.0),
+                withAttributes: attrs
+            )
+
+            img.unlockFocus()
+            img.isTemplate = true
+            return img
         }
-
-        (textContent as NSString).draw(
-            at: NSPoint(x: curX, y: (height - strSize.height) / 2.0),
-            withAttributes: attrs
-        )
-
-        img.unlockFocus()
-        img.isTemplate = true
-        return img
     }
 
-    /// Vẽ gộp 2 thẻ trên cùng 1 MenuBarItem với thứ tự, kiểu nhãn, font và dấu ngăn cách tùy biến
+    /// Vẽ gộp 2 thẻ trên cùng 1 MenuBarItem với thứ tự, bố cục (Inline/Stacked), kiểu nhãn, font và dấu ngăn cách tùy biến
     public static func renderCombinedMenuBarStatusImage(
         usageWatts: Double,
         chargeWatts: Double,
+        layoutMode: MenuBarLayoutMode = .inline,
         tagOrder: [MenuBarTagType] = [.usage, .charge],
         labelStyle: MenuBarLabelStyle = .iconOnly,
         usageText: String = "usage",
@@ -218,104 +285,241 @@ public struct SleepingMacIconView: View {
         fontWeight: MenuBarFontWeight = .semibold,
         separator: MenuBarSeparatorStyle = .none
     ) -> NSImage {
-        let font = resolveFont(size: fontSize, design: fontDesign, weight: fontWeight)
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: NSColor.black
-        ]
-
-        let hasIcon = (labelStyle == .iconOnly || labelStyle == .iconAndText)
-        let hasText = (labelStyle == .textOnly || labelStyle == .iconAndText)
-        let iconSize: CGFloat = max(11.0, fontSize * 1.05)
-        let iconSpacing: CGFloat = 3.0
         let height: CGFloat = 22.0
 
-        struct TagRenderData {
-            let type: MenuBarTagType
-            let watts: Double
-            let text: String
-            let textSize: NSSize
-            let totalWidth: CGFloat
-        }
+        if layoutMode == .stacked {
+            // STACKED MODE: Label trên, Số dưới (Chuẩn Stats app)
+            let topFontSize = max(7.5, min(9.0, fontSize * 0.65))
+            let bottomFontSize = max(9.0, min(11.5, fontSize * 0.78))
+            let topFont = resolveFont(size: topFontSize, design: fontDesign, weight: .bold)
+            let bottomFont = resolveFont(size: bottomFontSize, design: .monospaced, weight: fontWeight)
 
-        let tags: [TagRenderData] = tagOrder.map { type in
-            let watts = (type == .usage) ? usageWatts : chargeWatts
-            let valStr = String(format: "%.1fW", watts)
-            let textContent: String
-            if hasText {
-                let label = (type == .usage) ? usageText : chargeText
-                let cleanLabel = label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    ? (type == .usage ? "usage" : "charge")
-                    : label
-                textContent = "\(cleanLabel) \(valStr)"
-            } else {
-                textContent = valStr
+            let topAttrs: [NSAttributedString.Key: Any] = [
+                .font: topFont,
+                .foregroundColor: NSColor.black.withAlphaComponent(0.85)
+            ]
+            let bottomAttrs: [NSAttributedString.Key: Any] = [
+                .font: bottomFont,
+                .foregroundColor: NSColor.black
+            ]
+
+            let hasIcon = (labelStyle == .iconOnly || labelStyle == .iconAndText)
+            let hasText = (labelStyle != .iconOnly)
+
+            struct StackedTagData {
+                let type: MenuBarTagType
+                let topText: String
+                let topSize: NSSize
+                let topLineWidth: CGFloat
+                let bottomText: String
+                let bottomSize: NSSize
+                let colWidth: CGFloat
+                let iconSize: CGFloat
+                let iconSpacing: CGFloat
             }
-            let size = (textContent as NSString).size(withAttributes: attrs)
-            let w = size.width + (hasIcon ? (iconSize + iconSpacing) : 0)
-            return TagRenderData(type: type, watts: watts, text: textContent, textSize: size, totalWidth: w)
-        }
 
-        let separatorText = separator.displaySymbol
-        let sepAttrs: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: NSColor.black.withAlphaComponent(0.65)
-        ]
-        let sepSize = (separator != .none) ? (separatorText as NSString).size(withAttributes: sepAttrs) : .zero
-        let groupGap: CGFloat = (separator == .none) ? 9.0 : 6.0
+            let tags: [StackedTagData] = tagOrder.map { type in
+                let watts = (type == .usage) ? usageWatts : chargeWatts
+                let defaultLabel = (type == .usage) ? "USAGE" : "CHG"
+                let rawLabel = (type == .usage) ? usageText : chargeText
+                let cleanLabel = rawLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? defaultLabel
+                    : rawLabel.uppercased()
 
-        var totalWidth: CGFloat = 4.0 // Initial padding
-        for (idx, tag) in tags.enumerated() {
-            totalWidth += tag.totalWidth
-            if idx < tags.count - 1 {
-                if separator != .none {
-                    totalWidth += groupGap + sepSize.width + groupGap
+                let topText = hasText ? cleanLabel : ""
+                let topSize = (topText as NSString).size(withAttributes: topAttrs)
+                let valStr = String(format: "%.1fW", watts)
+                let bottomSize = (valStr as NSString).size(withAttributes: bottomAttrs)
+
+                let iconSize: CGFloat = max(8.0, topFontSize * 0.95)
+                let iconSpacing: CGFloat = 2.0
+                let topLineWidth = topSize.width + (hasIcon ? (iconSize + iconSpacing) : 0)
+                let colWidth = max(topLineWidth, bottomSize.width)
+
+                return StackedTagData(
+                    type: type,
+                    topText: topText,
+                    topSize: topSize,
+                    topLineWidth: topLineWidth,
+                    bottomText: valStr,
+                    bottomSize: bottomSize,
+                    colWidth: colWidth,
+                    iconSize: iconSize,
+                    iconSpacing: iconSpacing
+                )
+            }
+
+            let sepGap: CGFloat = 5.0
+            let effectiveSep = (separator == .none) ? MenuBarSeparatorStyle.verticalBar : separator
+
+            var totalWidth: CGFloat = 3.0 // Leading pad
+            for (idx, tag) in tags.enumerated() {
+                totalWidth += tag.colWidth
+                if idx < tags.count - 1 {
+                    totalWidth += sepGap * 2 + 1.0 // Gap + 1px vertical line + Gap
+                }
+            }
+            totalWidth += 3.0 // Trailing pad
+            totalWidth = ceil(totalWidth)
+
+            let img = NSImage(size: NSSize(width: totalWidth, height: height))
+            img.lockFocus()
+
+            var curX: CGFloat = 3.0
+
+            for (idx, tag) in tags.enumerated() {
+                let topX = curX + (tag.colWidth - tag.topLineWidth) / 2.0
+                let bottomX = curX + (tag.colWidth - tag.bottomSize.width) / 2.0
+
+                if hasIcon {
+                    let symConfig = NSImage.SymbolConfiguration(pointSize: tag.iconSize, weight: .bold)
+                    let symName = (tag.type == .usage) ? "bolt.fill" : "powerplug.fill"
+                    if let symImg = NSImage(systemSymbolName: symName, accessibilityDescription: nil)?.withSymbolConfiguration(symConfig) {
+                        symImg.draw(in: NSRect(x: topX, y: 12.0, width: tag.iconSize, height: tag.iconSize))
+                    }
+                }
+
+                if hasText {
+                    let textDrawX = topX + (hasIcon ? (tag.iconSize + tag.iconSpacing) : 0)
+                    (tag.topText as NSString).draw(at: NSPoint(x: textDrawX, y: 11.5), withAttributes: topAttrs)
+                }
+
+                (tag.bottomText as NSString).draw(at: NSPoint(x: bottomX, y: 1.5), withAttributes: bottomAttrs)
+
+                curX += tag.colWidth
+
+                if idx < tags.count - 1 {
+                    curX += sepGap
+
+                    if effectiveSep == .verticalBar || separator == .none {
+                        let path = NSBezierPath()
+                        let lineX = round(curX) + 0.5
+                        path.move(to: NSPoint(x: lineX, y: 2.5))
+                        path.line(to: NSPoint(x: lineX, y: 19.5))
+                        path.lineWidth = 1.0
+                        NSColor.black.withAlphaComponent(0.40).setStroke()
+                        path.stroke()
+                        curX += 1.0 + sepGap
+                    } else {
+                        let sepStr = effectiveSep.displaySymbol
+                        let sepFont = resolveFont(size: fontSize * 0.8, design: fontDesign, weight: .regular)
+                        let sepAttrs: [NSAttributedString.Key: Any] = [
+                            .font: sepFont,
+                            .foregroundColor: NSColor.black.withAlphaComponent(0.60)
+                        ]
+                        let sepSize = (sepStr as NSString).size(withAttributes: sepAttrs)
+                        (sepStr as NSString).draw(
+                            at: NSPoint(x: curX, y: (height - sepSize.height) / 2.0),
+                            withAttributes: sepAttrs
+                        )
+                        curX += sepSize.width + sepGap
+                    }
+                }
+            }
+
+            img.unlockFocus()
+            img.isTemplate = true
+            return img
+        } else {
+            // INLINE MODE
+            let font = resolveFont(size: fontSize, design: fontDesign, weight: fontWeight)
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: NSColor.black
+            ]
+
+            let hasIcon = (labelStyle == .iconOnly || labelStyle == .iconAndText)
+            let hasText = (labelStyle == .textOnly || labelStyle == .iconAndText)
+            let iconSize: CGFloat = max(11.0, fontSize * 1.05)
+            let iconSpacing: CGFloat = 3.0
+
+            struct TagRenderData {
+                let type: MenuBarTagType
+                let watts: Double
+                let text: String
+                let textSize: NSSize
+                let totalWidth: CGFloat
+            }
+
+            let tags: [TagRenderData] = tagOrder.map { type in
+                let watts = (type == .usage) ? usageWatts : chargeWatts
+                let valStr = String(format: "%.1fW", watts)
+                let textContent: String
+                if hasText {
+                    let label = (type == .usage) ? usageText : chargeText
+                    let cleanLabel = label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? (type == .usage ? "usage" : "charge")
+                        : label
+                    textContent = "\(cleanLabel) \(valStr)"
                 } else {
-                    totalWidth += groupGap
+                    textContent = valStr
+                }
+                let size = (textContent as NSString).size(withAttributes: attrs)
+                let w = size.width + (hasIcon ? (iconSize + iconSpacing) : 0)
+                return TagRenderData(type: type, watts: watts, text: textContent, textSize: size, totalWidth: w)
+            }
+
+            let separatorText = separator.displaySymbol
+            let sepAttrs: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: NSColor.black.withAlphaComponent(0.65)
+            ]
+            let sepSize = (separator != .none) ? (separatorText as NSString).size(withAttributes: sepAttrs) : .zero
+            let groupGap: CGFloat = (separator == .none) ? 9.0 : 6.0
+
+            var totalWidth: CGFloat = 4.0 // Initial padding
+            for (idx, tag) in tags.enumerated() {
+                totalWidth += tag.totalWidth
+                if idx < tags.count - 1 {
+                    if separator != .none {
+                        totalWidth += groupGap + sepSize.width + groupGap
+                    } else {
+                        totalWidth += groupGap
+                    }
                 }
             }
+            totalWidth += 4.0 // Trailing padding
+            totalWidth = ceil(totalWidth)
+
+            let img = NSImage(size: NSSize(width: totalWidth, height: height))
+            img.lockFocus()
+
+            var curX: CGFloat = 3.0
+            let symConfig = NSImage.SymbolConfiguration(pointSize: fontSize, weight: fontWeight.nsWeight)
+
+            for (idx, tag) in tags.enumerated() {
+                if hasIcon {
+                    let symName = (tag.type == .usage) ? "bolt.fill" : "powerplug.fill"
+                    if let symImg = NSImage(systemSymbolName: symName, accessibilityDescription: nil)?.withSymbolConfiguration(symConfig) {
+                        symImg.draw(in: NSRect(x: curX, y: (height - iconSize) / 2.0, width: iconSize, height: iconSize))
+                    }
+                    curX += iconSize + iconSpacing
+                }
+
+                (tag.text as NSString).draw(
+                    at: NSPoint(x: curX, y: (height - tag.textSize.height) / 2.0),
+                    withAttributes: attrs
+                )
+                curX += tag.textSize.width
+
+                if idx < tags.count - 1 {
+                    if separator != .none {
+                        curX += groupGap
+                        (separatorText as NSString).draw(
+                            at: NSPoint(x: curX, y: (height - sepSize.height) / 2.0),
+                            withAttributes: sepAttrs
+                        )
+                        curX += sepSize.width + groupGap
+                    } else {
+                        curX += groupGap
+                    }
+                }
+            }
+
+            img.unlockFocus()
+            img.isTemplate = true
+            return img
         }
-        totalWidth += 4.0 // Trailing padding
-        totalWidth = ceil(totalWidth)
-
-        let img = NSImage(size: NSSize(width: totalWidth, height: height))
-        img.lockFocus()
-
-        var curX: CGFloat = 3.0
-        let symConfig = NSImage.SymbolConfiguration(pointSize: fontSize, weight: fontWeight.nsWeight)
-
-        for (idx, tag) in tags.enumerated() {
-            if hasIcon {
-                let symName = (tag.type == .usage) ? "bolt.fill" : "powerplug.fill"
-                if let symImg = NSImage(systemSymbolName: symName, accessibilityDescription: nil)?.withSymbolConfiguration(symConfig) {
-                    symImg.draw(in: NSRect(x: curX, y: (height - iconSize) / 2.0, width: iconSize, height: iconSize))
-                }
-                curX += iconSize + iconSpacing
-            }
-
-            (tag.text as NSString).draw(
-                at: NSPoint(x: curX, y: (height - tag.textSize.height) / 2.0),
-                withAttributes: attrs
-            )
-            curX += tag.textSize.width
-
-            if idx < tags.count - 1 {
-                if separator != .none {
-                    curX += groupGap
-                    (separatorText as NSString).draw(
-                        at: NSPoint(x: curX, y: (height - sepSize.height) / 2.0),
-                        withAttributes: sepAttrs
-                    )
-                    curX += sepSize.width + groupGap
-                } else {
-                    curX += groupGap
-                }
-            }
-        }
-
-        img.unlockFocus()
-        img.isTemplate = true
-        return img
     }
 
     /// Vẽ trực tiếp NSImage monochrome (template = true) tương thích ngược
@@ -323,6 +527,7 @@ public struct SleepingMacIconView: View {
         renderCombinedMenuBarStatusImage(
             usageWatts: systemTotalW,
             chargeWatts: dcInW,
+            layoutMode: .inline,
             tagOrder: [.usage, .charge],
             labelStyle: .iconOnly,
             fontSize: 13.0,

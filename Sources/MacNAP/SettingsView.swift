@@ -143,6 +143,7 @@ private struct MenuBarSettingsTab: View {
                                 let img1 = SleepingMacIconView.renderSingleTagImage(
                                     tagType: firstTag,
                                     watts: (firstTag == .usage) ? (state.systemLoadWatts > 0 ? state.systemLoadWatts : 25.4) : (dcIn > 0 ? dcIn : 23.2),
+                                    layoutMode: state.menuBarLayoutMode,
                                     labelStyle: state.menuBarLabelStyle,
                                     customLabel: (firstTag == .usage) ? state.menuBarUsageText : state.menuBarChargeText,
                                     fontSize: CGFloat(state.menuBarFontSize),
@@ -158,6 +159,7 @@ private struct MenuBarSettingsTab: View {
                                 let img2 = SleepingMacIconView.renderSingleTagImage(
                                     tagType: secondTag,
                                     watts: (secondTag == .usage) ? (state.systemLoadWatts > 0 ? state.systemLoadWatts : 25.4) : (dcIn > 0 ? dcIn : 23.2),
+                                    layoutMode: state.menuBarLayoutMode,
                                     labelStyle: state.menuBarLabelStyle,
                                     customLabel: (secondTag == .usage) ? state.menuBarUsageText : state.menuBarChargeText,
                                     fontSize: CGFloat(state.menuBarFontSize),
@@ -175,6 +177,7 @@ private struct MenuBarSettingsTab: View {
                             let img = SleepingMacIconView.renderCombinedMenuBarStatusImage(
                                 usageWatts: (state.systemLoadWatts > 0 ? state.systemLoadWatts : 25.4),
                                 chargeWatts: (dcIn > 0 ? dcIn : 23.2),
+                                layoutMode: state.menuBarLayoutMode,
                                 tagOrder: state.menuBarTagOrder,
                                 labelStyle: state.menuBarLabelStyle,
                                 usageText: state.menuBarUsageText,
@@ -207,6 +210,26 @@ private struct MenuBarSettingsTab: View {
                 }
             } header: {
                 Text(state.language == .vi ? "Trực quan hoá Menu Bar" : "Menu Bar Visualization")
+                    .font(.system(size: 12, weight: .bold))
+            }
+
+            // Section 2: Kiểu bố cục (Inline vs Stacked 2 dòng)
+            Section {
+                Picker(selection: $state.menuBarLayoutMode, label:
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(state.language == .vi ? "Bố cục hiển thị thẻ" : "Layout Presentation")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(state.language == .vi ? (state.menuBarLayoutMode == .stacked ? "2 dòng xếp chồng: Nhãn trên, số Watt dưới (Chuẩn widget Stats / iStat Menus)." : "1 dòng ngang: Biểu tượng/chữ và số Watt nằm ngang.") : (state.menuBarLayoutMode == .stacked ? "Stacked 2-line: Label on top, Watts on bottom (Stats widget style)." : "Single line inline."))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                ) {
+                    Text(state.language == .vi ? "1 dòng ngang (Inline)" : "Single Line (Inline)").tag(MenuBarLayoutMode.inline)
+                    Text(state.language == .vi ? "2 dòng xếp chồng (Label trên, Watt dưới - Kiểu Stats)" : "Stacked 2-line (Stats style)").tag(MenuBarLayoutMode.stacked)
+                }
+                .pickerStyle(.radioGroup)
+            } header: {
+                Text(state.language == .vi ? "Kiểu bố cục (Layout)" : "Layout Presentation")
                     .font(.system(size: 12, weight: .bold))
             }
 
