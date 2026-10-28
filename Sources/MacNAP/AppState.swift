@@ -50,6 +50,8 @@ public final class AppState: ObservableObject {
 
     @Published public var selectedLogFilter: PowerLogCategory = .all
     @Published public var logSearchQuery: String = ""
+    @Published public var appDiagnosticLogs: [AppDiagnosticLogEntry] = []
+    @Published public var selectedRightLogMode: Int = 0 // 0 = App Activity & Crash Log, 1 = pmset Power Log
 
     @Published public var systemLoadWatts: Double = 0.0
     @Published public var cpuCoreWatts: Double = 0.0
@@ -117,6 +119,12 @@ public final class AppState: ObservableObject {
     private var lastSleepWakeHandledAt: Date = .distantPast
 
     public init() {
+        AppDiagnosticLogger.shared.log(
+            .info,
+            component: "Startup",
+            message: "Khởi động MacNAP Daemon • File log: \(AppDiagnosticLogger.shared.primaryLogURL.path)"
+        )
+        self.appDiagnosticLogs = AppDiagnosticLogger.shared.recentEntries()
         applyDockVisibilityPolicy()
         setupSleepWakeObservers()
         syncDarkWakeSettingState()
@@ -128,7 +136,7 @@ public final class AppState: ObservableObject {
                 action: "Khởi động MacNAP",
                 target: "Menu Bar Daemon",
                 success: true,
-                detail: "Chạy ngầm trên Menu Bar • Tự động Unmount khi ngủ & Remount khi mở nắp."
+                detail: "Chạy ngầm trên Menu Bar • Tự động Unmount khi Sleep/CloseLid & Remount khi Wake/OpenLid."
             )
         )
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
@@ -136,6 +144,31 @@ public final class AppState: ObservableObject {
                 self?.refreshAll()
             }
         }
+    }
+
+    public func writeDiagnosticLog(_ level: DiagnosticLogLevel, component: String, message: String) {
+        AppDiagnosticLogger.shared.log(level, component: component, message: message)
+        appDiagnosticLogs = AppDiagnosticLogger.shared.recentEntries()
+    }
+
+    public func openDiagnosticLogInFinder() {
+        NSWorkspace.shared.activateFileViewerSelecting([
+            AppDiagnosticLogger.shared.primaryLogURL,
+            AppDiagnosticLogger.shared.userLibraryLogURL
+        ])
+    }
+
+    public func copyDiagnosticLogPath() {
+        let p = AppDiagnosticLogger.shared.primaryLogURL.path
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(p, forType: .string)
+        lastActionLog = "Đã copy đường dẫn file log: \(p)"
+    }
+
+    public func clearDiagnosticLogs() {
+        AppDiagnosticLogger.shared.clearLogs()
+        appDiagnosticLogs = AppDiagnosticLogger.shared.recentEntries()
+        lastActionLog = "Đã làm sạch file log hoạt động."
     }
 
     public func applyCustomDockIcon() {
@@ -252,6 +285,7 @@ public final class AppState: ObservableObject {
             }
             if let first = logs.first {
                 self.lastActionLog = "[\(trigger) • Auto-Unmount] \(first.target): \(first.detail)"
+                self.writeDiagnosticLog(.sleepLid, component: trigger, message: "\(first.target) -> \(first.detail)")
             }
             self.refreshAll(forcePartitionScan: true)
         }
@@ -281,6 +315,7 @@ public final class AppState: ObservableObject {
                 }
                 if let first = logs.first {
                     self.lastActionLog = "[\(trigger) • Auto-Remount] \(first.target): \(first.detail)"
+                    self.writeDiagnosticLog(.sleepLid, component: trigger, message: "\(first.target) -> \(first.detail)")
                 }
             }
             self.refreshAll(forcePartitionScan: true)
@@ -427,6 +462,34 @@ public final class AppState: ObservableObject {
             if self.samples.count > 60 {
                 self.samples.removeFirst(self.samples.count - 60)
             }
+
+            if self.tickCount % 15 == 0 {
+                AppDiagnosticLogger.shared.updateRunningLock(
+                    status: String(
+                        format: "Tick=%d | Sys=%.2fW | DCIn=%.2fW | Periph=%.2fW | Bat=%d%%",
+                        self.tickCount,
+                        p.systemTotalW,
+                        p.dcInW,
+                        periphW,
+                        p.percent
+                    )
+                )
+            }
+            if self.tickCount == 2 || self.tickCount % 60 == 0 {
+                self.writeDiagnosticLog(
+                    .info,
+                    component: "Telemetry",
+                    message: String(
+                        format: "SMC PSTR=%.2fW | PDTR=%.2fW | Ngoại vi=%.2fW (%d thiết bị) | Pin=%d%% (%@)",
+                        p.systemTotalW,
+                        p.dcInW,
+                        periphW,
+                        scannedPeripherals.count,
+                        p.percent,
+                        self.powerSupplyShortLabel
+                    )
+                )
+            }
         }
     }
 
@@ -502,6 +565,7 @@ public final class AppState: ObservableObject {
             self.actionHistory.insert(contentsOf: logs, at: 0)
             if let first = logs.first {
                 self.lastActionLog = "[Unmount] \(first.target): \(first.detail)"
+                self.writeDiagnosticLog(.action, component: "UnmountAll", message: "\(first.target): \(first.detail)")
             }
             self.refreshAll(forcePartitionScan: true)
         }
@@ -517,6 +581,7 @@ public final class AppState: ObservableObject {
             self.actionHistory.insert(contentsOf: logs, at: 0)
             if let first = logs.first {
                 self.lastActionLog = "[Remount] \(first.target): \(first.detail)"
+                self.writeDiagnosticLog(.action, component: "RemountAll", message: "\(first.target): \(first.detail)")
             }
             self.refreshAll(forcePartitionScan: true)
         }
@@ -548,6 +613,11 @@ public final class AppState: ObservableObject {
                 detail: res.message
             )
             self.lastActionLog = entry.detail
+            self.writeDiagnosticLog(
+                res.success ? .action : .error,
+                component: "DiskUtil",
+                message: "\(entry.action) \(entry.target) -> \(res.message)"
+            )
             self.refreshAll(forcePartitionScan: true)
         }
     }
@@ -603,6 +673,11 @@ public final class AppState: ObservableObject {
             self.isUpdatingDarkWake = false
             self.disableDarkWakeOnBattery = actual
             self.lastActionLog = res.message
+            self.writeDiagnosticLog(
+                res.success ? .action : .warn,
+                component: "DarkWake",
+                message: res.message
+            )
             self.actionHistory.insert(
                 SleepGuardLogEntry(
                     timestamp: Date(),

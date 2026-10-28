@@ -2,6 +2,16 @@
 
 ## [Unreleased] - 2026-10-28
 
+### [11:44] feat: redesign Power & Assertions Log tab + add persistent Activity & Signal Crash Logger (`AppDiagnosticLogger`)
+- **Hệ thống tự tạo File Log Hoạt động & Bẫy lỗi Văng App (`AppDiagnosticLogger.swift`)**:
+  - Tự động ghi log đồng bộ (`synchronize`) xuống `/Users/lu/HUB/MacNAP/logs/macnap-activity.log` và `~/Library/Logs/MacNAP/macnap-activity.log` (hỗ trợ xoay vòng file log `rotate` khi vượt quá 2MB).
+  - Cài đặt **Crash & Signal Guard** (`NSSetUncaughtExceptionHandler` + POSIX signal handlers cho `SIGABRT`, `SIGSEGV`, `SIGBUS`, `SIGILL`, `SIGTRAP`, `SIGFPE`) ghi trực tiếp stack trace (`backtrace_symbols_fd`) vào file log trước khi tiến trình thoát, kèm file `.macnap-running.lock` tự phát hiện nếu phiên chạy trước bị văng/force-kill.
+- **Thiết kế lại toàn diện Tab 4 — `Nhật ký Nguồn & Chẩn đoán` (`DashboardView.swift`, `SleepMountGuardService.swift`)**:
+  - Bổ sung 3 thẻ KPI Chẩn đoán ở đầu trang (`Tiến trình giữ máy thức`, `Bảo vệ Sleep/CloseLid & DarkWake`, `Nhật ký Hoạt động & Bẫy lỗi Crash`) và thanh công cụ mở nhanh file log trong Finder.
+  - Chia 2 cột đối xứng chiều cao cố định (`465pt`) có `ScrollView` riêng biệt:
+    - **Cột trái**: Làm sạch chuỗi XPC/UUID rối mắt của `runningboardd`/`Safari`/`coreaudiod` thành thẻ tiến trình gọn đẹp, dễ đọc, kèm lịch sử Auto-Unmount/Remount.
+    - **Cột phải**: Bộ chuyển đổi kép giữa **🛠 Nhật ký App & Crash Guard** (hiển thị realtime mọi thao tác của app) và **⚡ Nhật ký Nguồn (`pmset`)** (chỉ lọc các dòng chuẩn có mốc ngày giờ đầu dòng, loại bỏ lỗi cắt chuỗi hex).
+
 ### [11:29] feat: auto-close Dashboard when inactive, zero-truncation responsive layout, 140W MacBook Pro hardware spec, realtime peripheral Watts & explicit Charging vs Direct Power status
 - **Tự động đóng cửa sổ Dashboard khi mất active (`MacNAPApp.swift`)**:
   - Theo dõi `NSApplication.didResignActiveNotification` và `NSWindow.didResignKeyNotification` để tự động ẩn (`orderOut`) cửa sổ Dashboard ngay khi nhấn ra ngoài, đồng thời giữ cửa sổ không bị đóng nhầm khi đang mở menu chọn ngôn ngữ/phiên ngủ bên trong.

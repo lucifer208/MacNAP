@@ -198,11 +198,14 @@ public final class SleepMountGuardService {
             return ([], [], [])
         }
 
-        // 1. Parse Detailed WakeDrainEvents (lấy eventLimit dòng cuối)
+        // 1. Parse Detailed WakeDrainEvents (chỉ lấy các dòng chuẩn có mốc ngày giờ đầu dòng YYYY-MM-DD HH:MM:SS)
         var events: [WakeDrainEvent] = []
-        for raw in rawLines.suffix(eventLimit).reversed() {
+        for raw in rawLines.reversed() {
+            if events.count >= eventLimit { break }
             let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            if line.isEmpty { continue }
+            guard line.range(of: #"^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}"#, options: .regularExpression) != nil else {
+                continue
+            }
             let timePart = String(line.prefix(19))
 
             let category: PowerLogCategory
@@ -224,6 +227,8 @@ public final class SleepMountGuardService {
             var procName = "kernel_powerd"
             if let pidRange = line.range(of: #"PID\s+\d+\([^)]+\)"#, options: .regularExpression) {
                 procName = String(line[pidRange])
+            } else if line.contains("Clamshell Sleep") {
+                procName = "Clamshell (CloseLid / Sleep)"
             } else if line.contains("rtc/SleepService") {
                 procName = "rtc/SleepService (DarkWake)"
             } else if line.contains("ATC0.USBWakeup") {
@@ -238,13 +243,24 @@ public final class SleepMountGuardService {
                 charge = Int(sub.filter(\.isNumber))
             }
 
-            let reason = String(line.dropFirst(min(26, line.count))).trimmingCharacters(in: .whitespaces)
+            // Cắt bỏ phần ngày giờ + cột phân loại đầu dòng để lấy nội dung sạch
+            var cleanBody = String(line.dropFirst(min(26, line.count))).trimmingCharacters(in: .whitespacesAndNewlines)
+            for prefixTag in ["Sleep", "DarkWake", "Wake", "Assertions"] {
+                if cleanBody.hasPrefix(prefixTag) {
+                    cleanBody = String(cleanBody.dropFirst(prefixTag.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                    break
+                }
+            }
+            if let idRange = cleanBody.range(of: #"\s+id:0x[^\s]+.*"#, options: .regularExpression) {
+                cleanBody.removeSubrange(idRange)
+            }
+
             events.append(
                 WakeDrainEvent(
                     timestamp: timePart,
                     category: category,
                     processOrComponent: procName,
-                    reason: reason,
+                    reason: cleanBody,
                     batteryPercent: charge,
                     estimatedImpactWatts: impactW
                 )
@@ -450,6 +466,7 @@ public final class SleepMountGuardService {
 
             let pattern = #"pid\s+(\d+)\(([^)]+)\):\s+\[[^\]]+\]\s+([0-9:]+)\s+([A-Za-z]+)\s+named:\s+"([^"]+)""#
             let regex = try? NSRegularExpression(pattern: pattern)
+            var seenKeys = Set<String>()
 
             for line in lines {
                 let nsLine = line as NSString
@@ -457,12 +474,43 @@ public final class SleepMountGuardService {
                     continue
                 }
                 let pid = nsLine.substring(with: match.range(at: 1))
-                let procName = nsLine.substring(with: match.range(at: 2))
+                var procName = nsLine.substring(with: match.range(at: 2))
                 let duration = nsLine.substring(with: match.range(at: 3))
                 let type = nsLine.substring(with: match.range(at: 4))
-                let detail = nsLine.substring(with: match.range(at: 5))
+                let rawDetail = nsLine.substring(with: match.range(at: 5))
+
+                // Làm sạch chuỗi XPC / UUID phức tạp thành mô tả ngắn gọn, dễ đọc
+                let cleanDetail: String
+                if rawDetail.localizedCaseInsensitiveContains("Safari") && rawDetail.localizedCaseInsensitiveContains("Media") {
+                    procName = "Safari • WebKit Media"
+                    cleanDetail = "Đang phát Video / Âm thanh trên Safari (WebKit Media Playback)"
+                } else if rawDetail.localizedCaseInsensitiveContains("Chrome") || rawDetail.localizedCaseInsensitiveContains("Brave") || rawDetail.localizedCaseInsensitiveContains("Arc") {
+                    cleanDetail = "Trình duyệt đang phát Media / giữ tiến trình nền"
+                } else if rawDetail.localizedCaseInsensitiveContains("BuiltInSpeakerDevice") {
+                    cleanDetail = "Kênh âm thanh Loa ngoài đang mở (BuiltInSpeakerDevice)"
+                } else if rawDetail.localizedCaseInsensitiveContains("com.apple.audio") {
+                    cleanDetail = "Luồng âm thanh hệ thống đang hoạt động (CoreAudio Active)"
+                } else if rawDetail.localizedCaseInsensitiveContains("externalmediamounted") {
+                    cleanDetail = "Đang kết nối ổ cứng ngoài (External Media Mounted)"
+                } else if rawDetail.localizedCaseInsensitiveContains("Prevent sleep while display is on") {
+                    cleanDetail = "Giữ hệ thống thức khi màn hình đang sáng"
+                } else if rawDetail.localizedCaseInsensitiveContains("USB Gaming Mouse") || rawDetail.localizedCaseInsensitiveContains("HIDEventService") {
+                    cleanDetail = "Tín hiệu ngoại vi Chuột / Bàn phím USB (HID Activity)"
+                } else if rawDetail.localizedCaseInsensitiveContains("Handoff") {
+                    cleanDetail = "Đồng bộ Handoff / Continuity giữa các thiết bị Apple"
+                } else if rawDetail.count > 95 {
+                    let tail = rawDetail.components(separatedBy: ":").last ?? String(rawDetail.prefix(85))
+                    cleanDetail = tail.trimmingCharacters(in: .whitespaces)
+                } else {
+                    cleanDetail = rawDetail
+                }
+
+                let dedupKey = "\(procName)|\(cleanDetail)"
+                if seenKeys.contains(dedupKey) { continue }
+                seenKeys.insert(dedupKey)
 
                 let isCulprit = procName.contains("coreaudiod")
+                    || procName.contains("Safari")
                     || procName.contains("sharingd")
                     || procName.contains("bluetoothd")
                     || procName.contains("powerd")
@@ -472,8 +520,10 @@ public final class SleepMountGuardService {
                 let wasteW: Double
                 if procName.contains("coreaudiod") {
                     wasteW = 0.85
-                } else if procName.contains("sharingd") {
+                } else if procName.contains("Safari") {
                     wasteW = 0.65
+                } else if procName.contains("sharingd") {
+                    wasteW = 0.55
                 } else if isCulprit {
                     wasteW = 0.45
                 } else {
@@ -486,7 +536,7 @@ public final class SleepMountGuardService {
                         processName: procName,
                         assertionType: type,
                         duration: duration,
-                        detail: detail,
+                        detail: cleanDetail,
                         isCulprit: isCulprit,
                         estimatedWasteWatts: wasteW
                     )

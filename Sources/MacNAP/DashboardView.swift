@@ -90,7 +90,7 @@ public struct DashboardView: View {
                         value: String(format: "%.2f W", state.externalConnected ? state.adapterWatts : 0.0)
                     )
                     sidebarMetricRow(
-                        icon: state.externalConnected ? "bolt.Batteryblock.fill" : "battery.50",
+                        icon: state.externalConnected ? "bolt.shield.fill" : "battery.50",
                         color: state.externalConnected ? .mint : .yellow,
                         label: L.t("Chế độ nguồn", "Power Mode"),
                         value: state.powerSupplyShortLabel
@@ -1001,162 +1001,369 @@ public struct DashboardView: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
     }
 
-    // MARK: - Power Log & Assertions
+    // MARK: - Power Log, Assertions & Crash Diagnostic Logger
     private var deepLogsAndAssertionsSection: some View {
         let L = state.l10n
-        return HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.yellow)
-                    Text(L.t("Tiến trình giữ máy thức (Assertions)", "Active Sleep Assertions"))
-                        .font(.headline)
-                    Spacer()
-                    Button(L.t("Copy lệnh tắt DarkWake", "Copy Zero-Drain Command")) {
-                        state.copyZeroDrainCommand()
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
+        let totalWasteW = state.assertions.reduce(0.0) { $0 + $1.estimatedWasteWatts }
+        let culpritCount = state.assertions.filter(\.isCulprit).count
 
-                if state.assertions.isEmpty {
-                    Text(L.t("Không có tiến trình nào đang giữ máy thức.", "No active sleep assertions."))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(state.assertions) { item in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("\(item.processName) (PID \(item.pid)) • \(item.duration)")
-                                    .font(.caption.bold())
-                                    .foregroundStyle(item.isCulprit ? .red : .primary)
-                                Text("\(item.assertionType): \(item.detail)")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Text(String(format: "+%.2f W", item.estimatedWasteWatts))
-                                .font(.caption.monospacedDigit().bold())
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.red.opacity(0.15), in: Capsule())
-                                .foregroundStyle(.red)
-                        }
-                        .padding(8)
-                        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
-                    }
-                }
-
-                Divider()
-
-                Label(
-                    L.t("Lịch sử Auto-Unmount / Auto-Remount", "Auto-Unmount / Remount History"),
-                    systemImage: "list.bullet.clipboard.fill"
+        return VStack(alignment: .leading, spacing: 16) {
+            // 1. Top 3 Equal-Height Diagnostic KPI Cards
+            HStack(spacing: 14) {
+                kpiCard(
+                    title: L.t("TIẾN TRÌNH GIỮ MÁY THỨC (ASSERTIONS)", "ACTIVE SLEEP ASSERTIONS"),
+                    mainValue: L.t("\(state.assertions.count) Tiến trình", "\(state.assertions.count) Processes"),
+                    badgeText: String(format: "+%.2f W", totalWasteW),
+                    badgeColor: culpritCount > 0 ? .red : .green,
+                    footerLine1: culpritCount > 0
+                        ? L.t("Phát hiện \(culpritCount) tiến trình ngăn máy vào Deep Sleep", "\(culpritCount) processes preventing Deep Sleep")
+                        : L.t("Không có tiến trình nào chặn Deep Sleep", "No processes blocking Deep Sleep"),
+                    footerLine2: L.t("Tự động làm sạch mô tả XPC từ pmset assertions", "Cleaned process assertions from pmset"),
+                    icon: "exclamationmark.triangle.fill",
+                    accent: culpritCount > 0 ? .red : .green
                 )
-                .font(.headline)
 
-                ForEach(state.actionHistory.prefix(8)) { log in
+                kpiCard(
+                    title: L.t("BẢO VỆ SLEEP / CLOSELID & DARKWAKE", "SLEEP / CLOSELID & DARKWAKE GUARD"),
+                    mainValue: state.disableDarkWakeOnBattery
+                        ? L.t("Đã chặn DarkWake", "DarkWake Blocked")
+                        : L.t("DarkWake Đang mở", "DarkWake Active"),
+                    badgeText: state.autoUnmountOnSleep ? "Auto-Unmount ON" : "Manual",
+                    badgeColor: state.disableDarkWakeOnBattery ? .green : .orange,
+                    footerLine1: L.t(
+                        "Đã ghi nhận \(state.actionHistory.count) thao tác Unmount / Remount",
+                        "\(state.actionHistory.count) Unmount / Remount actions recorded"
+                    ),
+                    footerLine2: L.t(
+                        "Gập nắp (CloseLid) & Sleep luôn đồng bộ tức thì",
+                        "CloseLid & Sleep hardware transitions unified"
+                    ),
+                    icon: "shield.lefthalf.filled",
+                    accent: .cyan
+                )
+
+                kpiCard(
+                    title: L.t("NHẬT KÝ HOẠT ĐỘNG & BẪY LỖI CRASH", "ACTIVITY & CRASH DIAGNOSTIC LOG"),
+                    mainValue: L.t("\(state.appDiagnosticLogs.count) Dòng Log", "\(state.appDiagnosticLogs.count) Log Entries"),
+                    badgeText: "● Crash Guard ON",
+                    badgeColor: .mint,
+                    footerLine1: L.t(
+                        "Ghi trực tiếp xuống: logs/macnap-activity.log",
+                        "Synced to disk: logs/macnap-activity.log"
+                    ),
+                    footerLine2: L.t(
+                        "Bắt tự động NSException + SIGABRT / SIGSEGV / SIGBUS",
+                        "Captures NSException + SIGABRT / SIGSEGV / SIGBUS"
+                    ),
+                    icon: "doc.badge.gearshape.fill",
+                    accent: .mint
+                )
+            }
+
+            // 2. Quick Diagnostic File Toolbar
+            HStack(spacing: 10) {
+                Image(systemName: "terminal.fill")
+                    .foregroundStyle(.mint)
+                Text(L.t("File Log Chẩn đoán:", "Diagnostic Log File:"))
+                    .font(.caption.bold())
+                Text(AppDiagnosticLogger.shared.primaryLogURL.path)
+                    .font(.system(size: 11.5, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                Spacer()
+
+                Button {
+                    state.openDiagnosticLogInFinder()
+                } label: {
+                    Label(L.t("Mở file Log (Finder)", "Show Log in Finder"), systemImage: "folder.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.indigo)
+                .controlSize(.small)
+
+                Button {
+                    state.copyDiagnosticLogPath()
+                } label: {
+                    Label(L.t("Copy đường dẫn Log", "Copy Log Path"), systemImage: "doc.on.doc")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                Button {
+                    state.copyZeroDrainCommand()
+                } label: {
+                    Label(L.t("Copy lệnh tắt DarkWake", "Copy Zero-Drain Cmd"), systemImage: "bolt.slash.fill")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+
+            // 3. Symmetrical 2-Column Equal-Height (470pt) Panels
+            HStack(alignment: .top, spacing: 16) {
+                // LEFT PANEL: Clean Assertions + Auto-Unmount History
+                VStack(alignment: .leading, spacing: 10) {
                     HStack {
-                        Circle()
-                            .fill(log.success ? Color.green : Color.red)
-                            .frame(width: 7, height: 7)
-                        Text(log.timestamp, style: .time)
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                        Text(log.action)
-                            .font(.caption2.bold())
-                        Text("• \(log.target):")
-                            .font(.caption2)
-                        Text(log.detail)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        Spacer()
-                    }
-                    .padding(6)
-                    .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: 6))
-                }
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
-
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Image(systemName: "doc.text.magnifyingglass")
-                        .foregroundStyle(.cyan)
-                    Text(L.t("Nhật ký Nguồn chi tiết (pmset Power Log)", "Detailed pmset Power Log"))
+                        Label(
+                            L.t("Tiến trình giữ máy thức & Lịch sử Bảo vệ", "Active Sleep Blockers & Guard History"),
+                            systemImage: "cpu.fill"
+                        )
                         .font(.headline)
-                    Spacer()
-                    Button {
-                        state.refreshWakeLogs()
-                    } label: {
-                        Text(state.isLoadingPmsetLog ? L.t("Đang tải...", "Loading...") : L.t("Làm mới", "Refresh"))
-                    }
-                    .disabled(state.isLoadingPmsetLog)
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-
-                HStack(spacing: 8) {
-                    Picker("", selection: $state.selectedLogFilter) {
-                        ForEach(PowerLogCategory.allCases, id: \.self) { cat in
-                            Text(cat.rawValue).tag(cat)
+                        Spacer()
+                        Button {
+                            state.refreshAll(forcePartitionScan: true)
+                        } label: {
+                            Label(L.t("Quét lại", "Rescan"), systemImage: "arrow.clockwise")
                         }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
                     }
-                    .pickerStyle(.segmented)
 
-                    TextField(L.t("Tìm process/lý do...", "Search process..."), text: $state.logSearchQuery)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 150)
-                }
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(state.filteredWakeEvents()) { ev in
-                            VStack(alignment: .leading, spacing: 3) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 8) {
+                            if state.assertions.isEmpty {
                                 HStack {
-                                    Text(ev.category.rawValue)
-                                        .font(.caption2.bold())
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 1)
-                                        .background(badgeColor(for: ev.category).opacity(0.2), in: Capsule())
-                                        .foregroundStyle(badgeColor(for: ev.category))
-
-                                    Text(ev.processOrComponent)
-                                        .font(.caption2.bold())
-
-                                    Text(ev.timestamp)
-                                        .font(.caption2.monospacedDigit())
+                                    Image(systemName: "checkmark.seal.fill")
+                                        .foregroundStyle(.green)
+                                    Text(L.t("Không có tiến trình nào đang giữ máy thức.", "No active sleep assertions."))
+                                        .font(.caption)
                                         .foregroundStyle(.secondary)
-
                                     Spacer()
-
-                                    Text(String(format: "~%.1f W", ev.estimatedImpactWatts))
-                                        .font(.caption2.monospacedDigit())
-                                        .foregroundStyle(.orange)
-
-                                    if let pct = ev.batteryPercent {
-                                        Text("Pin \(pct)%")
-                                            .font(.caption2.bold())
-                                            .foregroundStyle(.green)
-                                    }
                                 }
-                                Text(ev.reason)
-                                    .font(.caption2.monospaced())
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(2)
+                                .padding(12)
+                                .background(Color.green.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                            } else {
+                                ForEach(state.assertions) { item in
+                                    HStack(spacing: 10) {
+                                        Image(systemName: iconForAssertionProcess(item.processName))
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundStyle(item.isCulprit ? .orange : .cyan)
+                                            .frame(width: 28, height: 28)
+                                            .background(
+                                                (item.isCulprit ? Color.orange : Color.cyan).opacity(0.14),
+                                                in: RoundedRectangle(cornerRadius: 7)
+                                            )
+
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            HStack(spacing: 6) {
+                                                Text(item.processName)
+                                                    .font(.system(size: 12.5, weight: .bold))
+                                                    .foregroundStyle(.primary)
+                                                Text("PID \(item.pid)")
+                                                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                                    .padding(.horizontal, 5)
+                                                    .padding(.vertical, 1.5)
+                                                    .background(Color.primary.opacity(0.08), in: Capsule())
+                                                    .foregroundStyle(.secondary)
+                                                Text(item.duration)
+                                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            Text(item.detail)
+                                                .font(.system(size: 11))
+                                                .foregroundStyle(.secondary)
+                                                .lineLimit(1)
+                                        }
+
+                                        Spacer()
+
+                                        Text(String(format: "+%.2f W", item.estimatedWasteWatts))
+                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 3)
+                                            .background((item.isCulprit ? Color.red : Color.orange).opacity(0.15), in: Capsule())
+                                            .foregroundStyle(item.isCulprit ? .red : .orange)
+                                    }
+                                    .padding(10)
+                                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 9))
+                                }
                             }
-                            .padding(8)
-                            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
+
+                            Divider()
+                                .padding(.vertical, 4)
+
+                            Text(L.t("LỊCH SỬ AUTO-UNMOUNT / REMOUNT GẦN ĐÂY", "RECENT AUTO-UNMOUNT / REMOUNT HISTORY"))
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.secondary)
+
+                            ForEach(state.actionHistory.prefix(10)) { log in
+                                HStack(spacing: 8) {
+                                    Circle()
+                                        .fill(log.success ? Color.green : Color.red)
+                                        .frame(width: 7, height: 7)
+                                    Text(log.timestamp, style: .time)
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                    Text(log.action)
+                                        .font(.system(size: 11, weight: .bold))
+                                    Text("• \(log.target):")
+                                        .font(.system(size: 11, weight: .medium))
+                                    Text(log.detail)
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                    Spacer()
+                                }
+                                .padding(8)
+                                .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: 7))
+                            }
                         }
                     }
                 }
-                .frame(height: 360)
+                .padding(16)
+                .frame(maxWidth: .infinity, minHeight: 465, maxHeight: 465, alignment: .topLeading)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+
+                // RIGHT PANEL: Dual Mode Viewer (MacNAP Activity & Crash Log vs pmset Power Log)
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 10) {
+                        Picker("", selection: $state.selectedRightLogMode) {
+                            Text(L.t("🛠 Nhật ký App & Crash Guard", "🛠 App Activity & Crash Log")).tag(0)
+                            Text(L.t("⚡ Nhật ký Nguồn (pmset)", "⚡ pmset Power Log")).tag(1)
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+
+                        Spacer()
+
+                        if state.selectedRightLogMode == 0 {
+                            Button {
+                                state.clearDiagnosticLogs()
+                            } label: {
+                                Label(L.t("Xoá Log", "Clear"), systemImage: "trash")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        } else {
+                            Button {
+                                state.refreshWakeLogs()
+                            } label: {
+                                Text(state.isLoadingPmsetLog ? L.t("Đang tải...", "Loading...") : L.t("Làm mới", "Refresh"))
+                            }
+                            .disabled(state.isLoadingPmsetLog)
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+                    }
+
+                    if state.selectedRightLogMode == 0 {
+                        // Mode 0: MacNAP Persistent Activity & Crash Log
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(state.appDiagnosticLogs) { entry in
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        HStack(spacing: 7) {
+                                            Text(entry.level.rawValue)
+                                                .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 1.5)
+                                                .background(diagnosticLevelColor(entry.level).opacity(0.18), in: Capsule())
+                                                .foregroundStyle(diagnosticLevelColor(entry.level))
+
+                                            Text("[\(entry.component)]")
+                                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                                .foregroundStyle(.cyan)
+
+                                            Spacer()
+
+                                            Text(entry.timeString)
+                                                .font(.system(size: 10.5, design: .monospaced))
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Text(entry.message)
+                                            .font(.system(size: 11, design: .monospaced))
+                                            .foregroundStyle(.primary.opacity(0.9))
+                                            .textSelection(.enabled)
+                                    }
+                                    .padding(8)
+                                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 7))
+                                }
+                            }
+                        }
+                    } else {
+                        // Mode 1: Clean pmset Power Log
+                        HStack(spacing: 8) {
+                            Picker("", selection: $state.selectedLogFilter) {
+                                ForEach(PowerLogCategory.allCases, id: \.self) { cat in
+                                    Text(cat.rawValue).tag(cat)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+
+                            TextField(L.t("Tìm process/lý do...", "Search..."), text: $state.logSearchQuery)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 145)
+                        }
+
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(state.filteredWakeEvents()) { ev in
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        HStack(spacing: 7) {
+                                            Text(ev.category.rawValue)
+                                                .font(.system(size: 9.5, weight: .bold))
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 1.5)
+                                                .background(badgeColor(for: ev.category).opacity(0.2), in: Capsule())
+                                                .foregroundStyle(badgeColor(for: ev.category))
+
+                                            Text(ev.processOrComponent)
+                                                .font(.system(size: 11, weight: .bold))
+
+                                            Spacer()
+
+                                            if let pct = ev.batteryPercent {
+                                                Text("Pin \(pct)%")
+                                                    .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                                                    .foregroundStyle(.green)
+                                            }
+
+                                            Text(ev.timestamp)
+                                                .font(.system(size: 10.5, design: .monospaced))
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Text(ev.reason)
+                                            .font(.system(size: 11, design: .monospaced))
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(2)
+                                            .textSelection(.enabled)
+                                    }
+                                    .padding(8)
+                                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 7))
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, minHeight: 465, maxHeight: 465, alignment: .topLeading)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
             }
-            .padding(16)
-            .frame(maxWidth: .infinity)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        }
+    }
+
+    private func iconForAssertionProcess(_ name: String) -> String {
+        let lower = name.lowercased()
+        if lower.contains("audio") { return "speaker.wave.2.fill" }
+        if lower.contains("safari") || lower.contains("webkit") { return "safari.fill" }
+        if lower.contains("windowserver") { return "display" }
+        if lower.contains("sharing") || lower.contains("handoff") { return "antenna.radiowaves.left.and.right" }
+        if lower.contains("powerd") { return "bolt.shield.fill" }
+        return "cpu"
+    }
+
+    private func diagnosticLevelColor(_ level: DiagnosticLogLevel) -> Color {
+        switch level {
+        case .info: return .blue
+        case .action: return .green
+        case .sleepLid: return .cyan
+        case .warn: return .orange
+        case .error, .crash: return .red
         }
     }
 

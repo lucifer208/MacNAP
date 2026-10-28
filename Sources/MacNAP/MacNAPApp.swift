@@ -32,6 +32,10 @@ public final class MacNAPAppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    public func applicationWillTerminate(_ notification: Notification) {
+        AppDiagnosticLogger.shared.markCleanShutdown()
+    }
+
     public func openDashboardWindow() {
         if !state.hideDockIcon {
             NSApplication.shared.setActivationPolicy(.regular)
