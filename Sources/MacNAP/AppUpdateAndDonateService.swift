@@ -3,6 +3,18 @@ import AppKit
 import SwiftUI
 import CoreImage.CIFilterBuiltins
 
+public struct GitHubReleaseResponse: Codable, Sendable {
+    public let tag_name: String
+    public let name: String?
+    public let body: String?
+    public let published_at: String?
+    public let html_url: String?
+
+    public var cleanVersion: String {
+        tag_name.trimmingCharacters(in: CharacterSet(charactersIn: "vV "))
+    }
+}
+
 public struct ReleaseManifest: Codable, Sendable {
     public let version: String
     public let buildNumber: Int
@@ -71,6 +83,7 @@ public final class AppUpdaterService: @unchecked Sendable {
         return 100
     }()
 
+    public let githubAPIURL = URL(string: "https://api.github.com/repos/lucifer208/MacNAP/releases/latest")!
     public let remoteManifestURL = URL(string: "https://raw.githubusercontent.com/lucifer208/MacNAP/main/releases/latest.json")!
     public let localManifestURL = URL(fileURLWithPath: "/Users/lu/HUB/MacNAP/releases/latest.json")
 
@@ -78,7 +91,7 @@ public final class AppUpdaterService: @unchecked Sendable {
         AppDiagnosticLogger.shared.log(
             .info,
             component: "Updater",
-            message: "Đang kiểm tra cập nhật (Phiên bản hiện tại: v\(Self.currentVersion) build \(Self.currentBuild))..."
+            message: "Đang kiểm tra cập nhật trên GitHub (Phiên bản hiện tại: v\(Self.currentVersion) build \(Self.currentBuild))..."
         )
 
         var manifest: ReleaseManifest?
@@ -87,13 +100,36 @@ public final class AppUpdaterService: @unchecked Sendable {
         config.timeoutIntervalForResource = 5.0
         let session = URLSession(configuration: config)
 
-        if let (data, response) = try? await session.data(from: remoteManifestURL),
+        // 1. Kiểm tra trực tiếp qua GitHub Releases API
+        var ghReq = URLRequest(url: githubAPIURL)
+        ghReq.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
+        ghReq.setValue("MacNAP-App", forHTTPHeaderField: "User-Agent")
+
+        if let (data, response) = try? await session.data(for: ghReq),
+           let http = response as? HTTPURLResponse,
+           http.statusCode == 200,
+           let gh = try? JSONDecoder().decode(GitHubReleaseResponse.self, from: data) {
+            let note = gh.body ?? "Bản phát hành MacNAP mới trên GitHub."
+            manifest = ReleaseManifest(
+                version: gh.cleanVersion,
+                buildNumber: 100,
+                releaseDate: String((gh.published_at ?? "").prefix(10)),
+                downloadURL: "https://github.com/lucifer208/MacNAP/releases/download/\(gh.tag_name)/MacNAP-\(gh.tag_name).zip",
+                releaseNotesVi: note,
+                releaseNotesEn: note
+            )
+        }
+
+        // 2. Thử đọc từ GitHub Raw Manifest
+        if manifest == nil,
+           let (data, response) = try? await session.data(from: remoteManifestURL),
            let http = response as? HTTPURLResponse,
            http.statusCode == 200,
            let decoded = try? JSONDecoder().decode(ReleaseManifest.self, from: data) {
             manifest = decoded
         }
 
+        // 3. Fallback sang Local Release Manifest
         if manifest == nil,
            let localData = try? Data(contentsOf: localManifestURL),
            let decoded = try? JSONDecoder().decode(ReleaseManifest.self, from: localData) {
@@ -852,6 +888,47 @@ public struct ReportIssueSheetView: View {
 
             Divider()
 
+            // GitHub Update Banner (Check update đồng thời khi mở trang báo lỗi)
+            HStack(spacing: 8) {
+                switch state.updateStatus {
+                case .checking:
+                    ProgressView().controlSize(.small)
+                    Text(L.t("Đang kiểm tra phiên bản mới nhất trên GitHub...", "Checking for updates on GitHub..."))
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundStyle(.cyan)
+                case .updateAvailable(let manifest):
+                    Image(systemName: "sparkles")
+                        .foregroundStyle(.orange)
+                    Text(L.t("Đã có bản cập nhật mới v\(manifest.version) trên GitHub! Bạn nên cập nhật trước để kiểm tra lỗi đã được sửa chưa.", "New update v\(manifest.version) available on GitHub! Please check if your bug is resolved."))
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                    Spacer()
+                    Button(L.t("Cập nhật ngay", "Update Now")) {
+                        state.performSelfUpdateNow(manifest: manifest)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.orange)
+                    .controlSize(.mini)
+                default:
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text(L.t("Đang ở bản mới nhất v\(state.appVersion) (GitHub: lucifer208/MacNAP)", "Running latest v\(state.appVersion) (GitHub: lucifer208/MacNAP)"))
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button {
+                        state.checkForUpdates(silentIfUpToDate: false)
+                    } label: {
+                        Label(L.t("Check lại", "Re-check"), systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+                }
+            }
+            .padding(9)
+            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+
             // Diagnostic Summary Preview
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -900,11 +977,9 @@ public struct ReportIssueSheetView: View {
 
                 Button {
                     copyDiagnosticReport()
-                    if let u = URL(string: githubIssueURL) {
-                        NSWorkspace.shared.open(u)
-                    }
+                    openPrefilledGitHubIssue()
                 } label: {
-                    Label(L.t("Mở trang GitHub Issues & Dán log", "Open GitHub Issue"), systemImage: "arrow.up.right.square.fill")
+                    Label(L.t("Mở GitHub Issues & Tự điền sẵn log", "Open GitHub Issue (Pre-filled)"), systemImage: "arrow.up.right.square.fill")
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.orange)
@@ -918,7 +993,31 @@ public struct ReportIssueSheetView: View {
             }
         }
         .padding(18)
-        .frame(width: 560)
+        .frame(width: 580)
+        .onAppear {
+            state.checkForUpdates(silentIfUpToDate: true)
+        }
+    }
+
+    private func openPrefilledGitHubIssue() {
+        var comp = URLComponents(string: "https://github.com/lucifer208/MacNAP/issues/new")!
+        let title = "[Báo lỗi] MacNAP v\(state.appVersion) - "
+        let body = """
+        ### 🐞 Mô tả sự cố (Issue Description)
+        <!-- Vui lòng mô tả chi tiết lỗi gặp phải tại đây -->
+
+        ### 💻 Thông tin Hệ thống & Chẩn đoán MacNAP (Diagnostics)
+        ```yaml
+        \(diagnosticReportString)
+        ```
+        """
+        comp.queryItems = [
+            URLQueryItem(name: "title", value: title),
+            URLQueryItem(name: "body", value: body)
+        ]
+        if let u = comp.url {
+            NSWorkspace.shared.open(u)
+        }
     }
 
     private var diagnosticReportString: String {

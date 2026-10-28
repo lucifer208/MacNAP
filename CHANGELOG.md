@@ -2,6 +2,13 @@
 
 ## [Unreleased] - 2026-10-28
 
+### [13:04] feat: pre-fill GitHub Issues report with markdown diagnostics & trigger live GitHub update check in Report modal
+- **Tự động mở và điền sẵn nội dung lên GitHub Issues (`ReportIssueSheetView` trong `AppUpdateAndDonateService.swift`)**:
+  - Nhấn nút **"Mở GitHub Issues & Tự điền sẵn log"** sẽ mã hoá toàn bộ tiêu đề và nội dung markdown chẩn đoán (phiên bản, đời máy MacBook, macOS, công suất, ngoại vi, tiến trình chặn sleep, trích xuất log) trực tiếp vào query URL GitHub `https://github.com/lucifer208/MacNAP/issues/new?title=...&body=...`, trình duyệt mở lên là nội dung đã nằm sẵn trong khung tạo Issue.
+- **Đồng thời kích hoạt kiểm tra cập nhật trên GitHub (`AppUpdaterService`)**:
+  - Ngay khi mở cửa sổ Báo cáo lỗi, app tự động gửi truy vấn kiểm tra phiên bản mới nhất từ GitHub Releases API (`api.github.com/repos/lucifer208/MacNAP/releases/latest`).
+  - Hiển thị ngay banner trạng thái cập nhật trên đầu cửa sổ: Thông báo nếu đã có bản cập nhật mới kèm nút "Cập nhật ngay", giúp người dùng thử bản vá mới nhất trước khi gửi báo cáo.
+
 ### [12:57] fix: clean Donate modal UI & pills layout, format VND currency, load real VietQR image from VietQR server & configure GitHub URL
 - **Sửa triệt để giao diện Modal Donate & Nút mức tiền (`DonateSheetView` trong `AppUpdateAndDonateService.swift`)**:
   - Tách chữ và emoji (`30.000đ ☕️`, `50.000đ 🍜`, `100.000đ 🚀`, `200.000đ 💎`, `Tuỳ tâm ❤️`) thành `HStack` cố định `.fixedSize()` và `.lineLimit(1)`, chấm dứt hoàn toàn hiện tượng icon nhảy xuống dòng 2 làm xấu nút.
