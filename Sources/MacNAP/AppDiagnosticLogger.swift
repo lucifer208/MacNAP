@@ -61,6 +61,18 @@ private func macnapSignalCrashHandler(_ sig: Int32) {
         Darwin.fsync(gCrashLogFileDescriptor)
     }
 
+    // Tự động khởi động lại MacNAP ngay sau khi crash
+    let appPath = Bundle.main.bundleURL.path.hasSuffix(".app") ? Bundle.main.bundleURL.path : "/Users/lu/HUB/MacNAP/MacNAP.app"
+    let helperScript = "sleep 0.8; open \"\(appPath)\""
+    var helperPid: pid_t = 0
+    var args: [UnsafeMutablePointer<CChar>?] = [
+        strdup("/bin/sh"),
+        strdup("-c"),
+        strdup(helperScript),
+        nil
+    ]
+    _ = posix_spawn(&helperPid, "/bin/sh", nil, nil, &args, nil)
+
     Darwin.signal(sig, SIG_DFL)
     Darwin.raise(sig)
 }
@@ -106,6 +118,7 @@ public final class AppDiagnosticLogger {
         loadRecentEntriesFromDisk()
         checkPreviousCrashState()
         installCrashHandlers()
+        spawnCrashWatchdogDaemon()
     }
 
     private func rotateLogIfNeeded(at url: URL) {
@@ -149,6 +162,18 @@ public final class AppDiagnosticLogger {
             let stack = exception.callStackSymbols.joined(separator: "\n  ")
             let msg = "Uncaught NSException: \(exception.name.rawValue) — \(exception.reason ?? "No reason")\n  \(stack)"
             AppDiagnosticLogger.shared.log(.crash, component: "NSException", message: msg)
+
+            // Tự động khởi động lại MacNAP ngay sau unhandled exception
+            let appPath = Bundle.main.bundleURL.path.hasSuffix(".app") ? Bundle.main.bundleURL.path : "/Users/lu/HUB/MacNAP/MacNAP.app"
+            let helperScript = "sleep 0.8; open \"\(appPath)\""
+            var helperPid: pid_t = 0
+            var args: [UnsafeMutablePointer<CChar>?] = [
+                strdup("/bin/sh"),
+                strdup("-c"),
+                strdup(helperScript),
+                nil
+            ]
+            _ = posix_spawn(&helperPid, "/bin/sh", nil, nil, &args, nil)
         }
 
         Darwin.signal(SIGABRT, macnapSignalCrashHandler)
@@ -157,6 +182,52 @@ public final class AppDiagnosticLogger {
         Darwin.signal(SIGILL, macnapSignalCrashHandler)
         Darwin.signal(SIGTRAP, macnapSignalCrashHandler)
         Darwin.signal(SIGFPE, macnapSignalCrashHandler)
+    }
+
+    /// Giám sát ngầm độc lập: nếu MacNAP bị dừng đột ngột mà không qua Clean Shutdown, tự khởi động lại
+    private func spawnCrashWatchdogDaemon() {
+        let appPID = ProcessInfo.processInfo.processIdentifier
+        let appBundlePath = Bundle.main.bundleURL.path.hasSuffix(".app") ? Bundle.main.bundleURL.path : "/Users/lu/HUB/MacNAP/MacNAP.app"
+        let lockPath = lockFileURL.path
+
+        let watchdogScript = """
+        APP_PID=\(appPID)
+        APP_PATH="\(appBundlePath)"
+        LOCK_FILE="\(lockPath)"
+        LAST_CRASH_FILE="/tmp/macnap_last_crash_ts"
+        COUNT_FILE="/tmp/macnap_crash_streak"
+
+        while kill -0 "$APP_PID" 2>/dev/null; do
+            sleep 1.0
+        done
+
+        # Khi app dừng: Nếu Lock file vẫn còn tồn tại -> Văng/Crash đột ngột
+        if [ -f "$LOCK_FILE" ]; then
+            NOW=$(date +%s)
+            LAST_TS=$(cat "$LAST_CRASH_FILE" 2>/dev/null || echo 0)
+            COUNT=$(cat "$COUNT_FILE" 2>/dev/null || echo 0)
+            DIFF=$((NOW - LAST_TS))
+
+            if [ "$DIFF" -lt 25 ]; then
+                COUNT=$((COUNT + 1))
+            else
+                COUNT=1
+            fi
+            echo "$NOW" > "$LAST_CRASH_FILE"
+            echo "$COUNT" > "$COUNT_FILE"
+
+            # Tránh vòng lặp crash vô tận (chỉ tự khởi động lại tối đa 3 lần / 25 giây)
+            if [ "$COUNT" -le 3 ]; then
+                sleep 0.8
+                open "$APP_PATH"
+            fi
+        fi
+        """
+
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/bin/sh")
+        proc.arguments = ["-c", watchdogScript]
+        try? proc.run()
     }
 
     private func loadRecentEntriesFromDisk() {

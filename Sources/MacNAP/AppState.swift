@@ -2,6 +2,7 @@ import Foundation
 import AppKit
 import Combine
 import ServiceManagement
+import UserNotifications
 
 public enum DashboardSection: String, CaseIterable, Identifiable {
     case overview = "Tổng quan & Realtime"
@@ -34,7 +35,7 @@ public final class AppState: ObservableObject {
     /// Chế độ phân tích ngủ: Theo lần Sleep (`bySession`) hoặc Theo Ngày từ 00:00 (`byDay`)
     @Published public var sleepAnalysisMode: SleepAnalysisMode = .bySession {
         didSet {
-            syncSelectedSessionForCurrentMode()
+            syncSelectedSessionForCurrentMode(forceFirst: true)
         }
     }
     @Published public var sleepSessions: [SleepSessionSummary] = []
@@ -102,6 +103,27 @@ public final class AppState: ObservableObject {
     @Published public var autoRemountOnWake: Bool = true
     @Published public var disableDarkWakeOnBattery: Bool = false
     @Published public var isUpdatingDarkWake: Bool = false
+
+    /// Tính năng 1: Tự động kích hoạt Low Power Mode khi Sleep trên Pin
+    @Published public var autoLowPowerOnSleep: Bool = (UserDefaults.standard.object(forKey: "MacNAP_AutoLowPowerOnSleep") as? Bool) ?? true {
+        didSet {
+            UserDefaults.standard.set(autoLowPowerOnSleep, forKey: "MacNAP_AutoLowPowerOnSleep")
+        }
+    }
+
+    /// Tính năng 2: Săn "Kẻ trộm giấc ngủ" (Insomnia Hunter) cảnh báo process chặn sleep khi gập nắp
+    @Published public var enableInsomniaAlert: Bool = (UserDefaults.standard.object(forKey: "MacNAP_EnableInsomniaAlert") as? Bool) ?? true {
+        didSet {
+            UserDefaults.standard.set(enableInsomniaAlert, forKey: "MacNAP_EnableInsomniaAlert")
+        }
+    }
+
+    /// Tính năng 5: Ngưỡng cảnh báo tụt pin sáng dậy (%)
+    @Published public var morningDrainAlertThreshold: Int = (UserDefaults.standard.object(forKey: "MacNAP_MorningDrainAlertThreshold") as? Int) ?? 3 {
+        didSet {
+            UserDefaults.standard.set(morningDrainAlertThreshold, forKey: "MacNAP_MorningDrainAlertThreshold")
+        }
+    }
     @Published public var launchAtLogin: Bool = UserDefaults.standard.bool(forKey: "MacNAP_LaunchAtLogin") {
         didSet {
             UserDefaults.standard.set(launchAtLogin, forKey: "MacNAP_LaunchAtLogin")
@@ -140,6 +162,24 @@ public final class AppState: ObservableObject {
     private var isRefreshingTelemetry: Bool = false
     private var wasLidClosedOrSleeping: Bool = false
     private var lastSleepWakeHandledAt: Date = .distantPast
+
+    public func postLocalNotification(title: String, body: String, identifier: String = UUID().uuidString) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: identifier,
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                AppDiagnosticLogger.shared.log(.error, component: "Notification", message: "Lỗi gửi thông báo: \(error.localizedDescription)")
+            }
+        }
+    }
 
     public init() {
         AppDiagnosticLogger.shared.log(
@@ -346,6 +386,27 @@ public final class AppState: ObservableObject {
         lastSleepWakeHandledAt = now
         wasLidClosedOrSleeping = true
 
+        // Tính năng 1: Tự động kích hoạt Low Power Mode khi gập nắp / Sleep trên Pin
+        if autoLowPowerOnSleep && !isCharging {
+            guardService.setLowPowerMode(enabled: true)
+            writeDiagnosticLog(.action, component: "LowPower", message: "\(trigger): Đã kích hoạt Low Power Mode (powermode 1) khi dùng Pin.")
+        }
+
+        // Tính năng 2: Săn "Kẻ trộm giấc ngủ" (Insomnia Hunter)
+        if enableInsomniaAlert {
+            let culprits = assertions.filter { $0.isCulprit }
+            if !culprits.isEmpty {
+                let culpritNames = Array(Set(culprits.map(\.processName))).prefix(3).joined(separator: ", ")
+                postLocalNotification(
+                    title: language == .vi ? "⚠️ Kẻ trộm giấc ngủ: Phát hiện app cản trở Sleep" : "⚠️ Sleep Insomnia Detected",
+                    body: language == .vi
+                        ? "Tiến trình (\(culpritNames)) đang giữ quyền ngăn Mac đi ngủ. Đóng app để tránh nóng máy & cạn pin."
+                        : "Processes (\(culpritNames)) are preventing Mac from deep sleep."
+                )
+                writeDiagnosticLog(.warn, component: "InsomniaHunter", message: "Phát hiện app cản trở giấc ngủ: \(culpritNames)")
+            }
+        }
+
         guard autoUnmountOnSleep else { return }
         let service = guardService
         Task {
@@ -372,9 +433,15 @@ public final class AppState: ObservableObject {
 
     private func handleUnifiedWakeOpenLid(trigger: String) {
         let now = Date()
-        guard now.timeIntervalSince(lastSleepWakeHandledAt) > 2.0 else { return }
+        guard now.timeIntervalSince(lastSleepWakeHandledAt) > 1.2 else { return }
         lastSleepWakeHandledAt = now
         wasLidClosedOrSleeping = false
+
+        // Tính năng 1: Hoàn trả trạng thái Power Mode khi mở nắp máy
+        if autoLowPowerOnSleep {
+            guardService.setLowPowerMode(enabled: false)
+            writeDiagnosticLog(.action, component: "LowPower", message: "\(trigger): Đã tắt Low Power Mode, hoàn trả hiệu năng bình thường.")
+        }
 
         Task {
             if self.autoRemountOnWake {
@@ -395,6 +462,15 @@ public final class AppState: ObservableObject {
                 if let first = logs.first {
                     self.lastActionLog = "[\(trigger) • Auto-Remount] \(first.target): \(first.detail)"
                     self.writeDiagnosticLog(.sleepLid, component: trigger, message: "\(first.target) -> \(first.detail)")
+                }
+
+                // Đợt 2 sau 1.5 giây: Quét lại toàn bộ ổ đĩa USB vừa được controller cấp điện lại
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                let retryLogs = await Task.detached(priority: .userInitiated) {
+                    service.remountAllOnWake(mountAllExternalIfEmpty: true)
+                }.value
+                if !retryLogs.isEmpty {
+                    self.actionHistory.insert(contentsOf: retryLogs, at: 0)
                 }
             }
             self.refreshAll(forcePartitionScan: true)
@@ -435,21 +511,21 @@ public final class AppState: ObservableObject {
         Task {
             let result = await Task.detached(priority: .utility) {
                 let p = telemetryRef.readBatteryAndSystemPower()
-                let lidSleep = telemetryRef.isClamshellSleepActive()
+                let lidClosed = telemetryRef.isClamshellClosed()
                 let parts = shouldScanDisksAndAssertions ? guardRef.scanExternalPartitions() : cachedParts
                 let scannedPeripherals = telemetryRef.scanPeripherals(partitions: parts)
                 let newAssertions = shouldScanDisksAndAssertions ? guardRef.scanSleepAssertions() : cachedAssertions
-                return (p, lidSleep, parts, scannedPeripherals, newAssertions)
+                return (p, lidClosed, parts, scannedPeripherals, newAssertions)
             }.value
 
-            let (p, lidSleep, parts, scannedPeripherals, newAssertions) = result
+            let (p, lidClosed, parts, scannedPeripherals, newAssertions) = result
             self.isRefreshingTelemetry = false
 
-            // Đồng bộ chuẩn Sleep/CloseLid & Wake/OpenLid (bỏ qua nếu đang dùng màn hình rời Clamshell Desktop Mode)
-            if lidSleep && !self.wasLidClosedOrSleeping {
-                self.handleUnifiedSleepCloseLid(trigger: "CloseLid / Sleep")
-            } else if !lidSleep && self.wasLidClosedOrSleeping {
-                self.handleUnifiedWakeOpenLid(trigger: "OpenLid / Wake")
+            // Tự động Unmount khi gập nắp (CloseLid) & Tự động Remount khi mở nắp (OpenLid)
+            if lidClosed && !self.wasLidClosedOrSleeping {
+                self.handleUnifiedSleepCloseLid(trigger: "CloseLid (Gập nắp)")
+            } else if !lidClosed && self.wasLidClosedOrSleeping {
+                self.handleUnifiedWakeOpenLid(trigger: "OpenLid (Mở nắp)")
             }
 
             let periphW = scannedPeripherals.reduce(0.0) { $0 + $1.watts }
@@ -593,6 +669,23 @@ public final class AppState: ObservableObject {
             self.sleepSessions = combined.sessions
             self.dailySleepSessions = combined.dailySessions
             self.syncSelectedSessionForCurrentMode()
+
+            // Tính năng 5: Báo động Tụt Pin Sáng Dậy (Morning Drain Alert)
+            if self.morningDrainAlertThreshold > 0,
+               let latest = combined.sessions.first,
+               latest.dropPercent >= self.morningDrainAlertThreshold {
+                let drop = latest.dropPercent
+                let wakes = latest.darkWakeCount
+                self.postLocalNotification(
+                    title: self.language == .vi
+                        ? "⚠️ Cảnh báo hao pin ban đêm (-\(drop)%)"
+                        : "⚠️ Overnight Battery Drain Alert (-\(drop)%)",
+                    body: self.language == .vi
+                        ? "Đêm qua máy bạn tụt \(drop)% pin (\(latest.startBattery)% → \(latest.endBattery)%) với \(wakes) lần DarkWake ngầm. Nhấn để xem chi tiết."
+                        : "Battery dropped \(drop)% (\(latest.startBattery)% → \(latest.endBattery)%) with \(wakes) background DarkWakes. Click to inspect.",
+                    identifier: "MorningDrainAlert-\(latest.id.uuidString)"
+                )
+            }
         }
     }
 
@@ -600,13 +693,16 @@ public final class AppState: ObservableObject {
         sleepAnalysisMode == .bySession ? sleepSessions : dailySleepSessions
     }
 
-    private func syncSelectedSessionForCurrentMode() {
+    public func syncSelectedSessionForCurrentMode(forceFirst: Bool = false) {
         let list = activeSleepSessionList
-        if selectedSessionID == nil || !list.contains(where: { $0.id == selectedSessionID }) {
-            // Ưu tiên phiên ngủ gần nhất có sụt pin >= 2% (VD đêm qua 27/10 22:51 -> 28/10 09:25 mất -20%)
-            if let recent = list.first(where: { $0.dropPercent >= 2 }) ?? list.first {
-                selectedSessionID = recent.id
-                selectedTimelineEvent = recent.events.first(where: { $0.kind == .darkWake }) ?? recent.events.first
+        if forceFirst || selectedSessionID == nil || !list.contains(where: { $0.id == selectedSessionID }) {
+            // Ưu tiên phiên ngủ gần nhất có sụt pin >= 2% hoặc phiên đầu tiên của danh sách mới
+            if let target = list.first(where: { $0.dropPercent >= 2 }) ?? list.first {
+                selectedSessionID = target.id
+                selectedTimelineEvent = target.events.first(where: { $0.kind == .darkWake }) ?? target.events.first
+            } else {
+                selectedSessionID = nil
+                selectedTimelineEvent = nil
             }
         } else if let current = currentSleepSession {
             selectedTimelineEvent = current.events.first(where: { $0.kind == .darkWake }) ?? current.events.first

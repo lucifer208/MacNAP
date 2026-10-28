@@ -85,6 +85,25 @@ public final class SleepMountGuardService {
         }
     }
 
+    public func mountWholeDisk(_ wholeDisk: String) -> (success: Bool, message: String) {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/sbin/diskutil")
+        proc.arguments = ["mountDisk", wholeDisk]
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = pipe
+
+        do {
+            try proc.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            proc.waitUntilExit()
+            let out = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return (proc.terminationStatus == 0, out.isEmpty ? "Đã mount toàn bộ ổ đĩa \(wholeDisk)" : out)
+        } catch {
+            return (false, error.localizedDescription)
+        }
+    }
+
     public func mountPartition(_ bsdName: String) -> (success: Bool, message: String) {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/usr/sbin/diskutil")
@@ -141,8 +160,35 @@ public final class SleepMountGuardService {
 
     public func remountAllOnWake(mountAllExternalIfEmpty: Bool = true) -> [SleepGuardLogEntry] {
         var entries: [SleepGuardLogEntry] = []
-        let currentParts = scanExternalPartitions()
+        var currentParts = scanExternalPartitions()
 
+        // Nếu vừa mở máy, USB controller có thể mất 0.5s để khởi tạo I/O
+        if currentParts.isEmpty {
+            Thread.sleep(forTimeInterval: 0.6)
+            currentParts = scanExternalPartitions()
+        }
+
+        // 1. Mount cả ổ đĩa cha (Whole Disk) trước để đánh thức controller
+        var parentDisks = autoUnmountedParentDisks
+        if parentDisks.isEmpty && mountAllExternalIfEmpty {
+            for part in currentParts where !part.isMounted {
+                parentDisks.insert(part.parentWholeDisk)
+            }
+        }
+        for parent in parentDisks where !parent.isEmpty {
+            let res = mountWholeDisk(parent)
+            entries.append(
+                SleepGuardLogEntry(
+                    timestamp: Date(),
+                    action: "Wake MountDisk",
+                    target: parent,
+                    success: res.success,
+                    detail: res.message
+                )
+            )
+        }
+
+        // 2. Mount từng phân vùng cụ thể
         var targets = autoUnmountedBySleep
         if targets.isEmpty && mountAllExternalIfEmpty {
             for part in currentParts where !part.isMounted {
@@ -357,21 +403,33 @@ public final class SleepMountGuardService {
         var current: [SleepTimelineEvent] = []
 
         for ev in parsedEvents {
-            // Bỏ qua các mốc đã cắm sạc AC liên tục khi gom phiên ngủ xả pin
-            if ev.usingAC && ev.kind != .fullWake { continue }
-            if let last = current.last {
+            if current.isEmpty {
+                if ev.kind != .fullWake {
+                    current = [ev]
+                }
+            } else if let last = current.last {
                 let gap = ev.timestamp.timeIntervalSince(last.timestamp)
-                // Gộp toàn bộ lần ngủ qua đêm thành 1 phiên liền mạch cho đến khi có FullWake hoặc ngắt > 4 tiếng
-                if gap > 14400 || (last.kind == .fullWake && ev.kind == .sleep) {
+
+                // Nếu khoảng cách giữa 2 sự kiện > 2 tiếng (7200s), hoặc sự kiện trước đã là FullWake, phiên cũ đã xong
+                if gap > 7200 || last.kind == .fullWake {
                     if current.count >= 2 {
                         sessions.append(current)
                     }
-                    current = [ev]
+                    if ev.kind != .fullWake {
+                        current = [ev]
+                    } else {
+                        current = []
+                    }
                 } else {
                     current.append(ev)
+                    // Một phiên ngủ kết thúc dứt điểm ngay khi máy được đánh thức mở nắp (FullWake)
+                    if ev.kind == .fullWake {
+                        if current.count >= 2 {
+                            sessions.append(current)
+                        }
+                        current = []
+                    }
                 }
-            } else {
-                current.append(ev)
             }
         }
         if current.count >= 2 {
@@ -411,7 +469,7 @@ public final class SleepMountGuardService {
             )
         }
 
-        // 3. Nhóm theo Ngày (Từ 00:00 đến lúc mở máy / kết thúc ngủ trong ngày đó)
+        // 3. Nhóm theo Ngày (Từ 00:00 đến lúc mở máy trong ngày đó)
         let dayKeyDF = DateFormatter()
         dayKeyDF.dateFormat = "yyyy-MM-dd"
         let displayDayDF = DateFormatter()
@@ -419,16 +477,31 @@ public final class SleepMountGuardService {
         let timeHM = DateFormatter()
         timeHM.dateFormat = "HH:mm"
 
-        var eventsByDay: [String: [SleepTimelineEvent]] = [:]
-        for ev in parsedEvents {
-            if ev.usingAC && ev.kind != .fullWake { continue }
-            let key = dayKeyDF.string(from: ev.timestamp)
-            eventsByDay[key, default: []].append(ev)
+        var dailySummaries: [SleepSessionSummary] = []
+        let calendar = Calendar.current
+
+        // Thu thập các ngày có phiên ngủ kết thúc (ngày thức dậy)
+        var sessionsByWakeDay: [String: [SleepTimelineEvent]] = [:]
+        for group in sessions {
+            guard let last = group.last else { continue }
+            let dayKey = dayKeyDF.string(from: last.timestamp)
+            // Lọc các sự kiện chỉ diễn ra từ 00:00 của ngày thức dậy
+            let startOfDay = calendar.startOfDay(for: last.timestamp)
+            let dayEvents = group.filter { $0.timestamp >= startOfDay }
+            if dayEvents.count >= 2 {
+                if let existing = sessionsByWakeDay[dayKey] {
+                    // Ưu tiên phiên có sụt pin lớn hơn hoặc nhiều sự kiện hơn
+                    if dayEvents.count > existing.count {
+                        sessionsByWakeDay[dayKey] = dayEvents
+                    }
+                } else {
+                    sessionsByWakeDay[dayKey] = dayEvents
+                }
+            }
         }
 
-        var dailySummaries: [SleepSessionSummary] = []
-        for key in eventsByDay.keys.sorted() {
-            guard let dayEvents = eventsByDay[key], dayEvents.count >= 2,
+        for dayKey in sessionsByWakeDay.keys.sorted() {
+            guard let dayEvents = sessionsByWakeDay[dayKey],
                   let first = dayEvents.first, let last = dayEvents.last else { continue }
 
             let hours = max(0.1, last.timestamp.timeIntervalSince(first.timestamp) / 3600.0)
@@ -442,10 +515,10 @@ public final class SleepMountGuardService {
             let usbWakes = dayEvents.filter { $0.rawLine.localizedCaseInsensitiveContains("USB") || $0.rawLine.localizedCaseInsensitiveContains("ATC") }.count
             let tcpActive = dayEvents.contains { $0.rawLine.contains("TCPKeepAlive=active") }
 
-            let dayStr = displayDayDF.string(from: first.timestamp)
+            let dayStr = displayDayDF.string(from: last.timestamp)
             let startHM = timeHM.string(from: first.timestamp)
             let endHM = timeHM.string(from: last.timestamp)
-            let title = "Ngày \(dayStr) (00:00 / \(startHM) → \(endHM))"
+            let title = "Ngày \(dayStr) (\(startHM) → \(endHM))"
 
             dailySummaries.append(
                 SleepSessionSummary(
@@ -703,5 +776,14 @@ public final class SleepMountGuardService {
         } catch {
             return (false, error.localizedDescription)
         }
+    }
+
+    /// Tự động bật hoặc tắt Low Power Mode trên Pin (`pmset -b powermode 1 / 0`)
+    public func setLowPowerMode(enabled: Bool) {
+        let mode = enabled ? "1" : "0"
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")
+        proc.arguments = ["-b", "powermode", mode]
+        try? proc.run()
     }
 }

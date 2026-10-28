@@ -150,6 +150,8 @@ public struct DashboardView: View {
                     ) { newValue in
                         state.setDarkWakeDisabled(newValue)
                     }
+                    sidebarToggleRow(title: L.t("Auto Low Power khi ngủ pin", "Auto Low Power on battery sleep"), isOn: $state.autoLowPowerOnSleep)
+                    sidebarToggleRow(title: L.t("Báo động App cản trở sleep", "Insomnia Hunter Alert"), isOn: $state.enableInsomniaAlert)
                 }
                 .padding(10)
                 .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
@@ -322,6 +324,14 @@ public struct DashboardView: View {
             }
 
             Spacer()
+
+            Button {
+                (NSApp.delegate as? MacNAPAppDelegate)?.openSettingsWindow()
+            } label: {
+                Label(L.t("Cài đặt (⌘,)", "Settings (⌘,)"), systemImage: "gearshape.fill")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
 
             Button {
                 state.showReportSheet = true
@@ -745,7 +755,7 @@ public struct DashboardView: View {
                         Image(systemName: "calendar.badge.clock")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.secondary)
-                        Text(L.t("Phiên ngủ:", "Session:"))
+                        Text(state.sleepAnalysisMode == .bySession ? L.t("Phiên ngủ:", "Sleep Session:") : L.t("Ngày phân tích:", "Analysis Day:"))
                             .font(.system(size: 11.5, weight: .semibold))
                             .foregroundStyle(.secondary)
                         if !activeList.isEmpty {
@@ -766,34 +776,70 @@ public struct DashboardView: View {
 
                     Spacer()
 
+                    let isBySession = (state.sleepAnalysisMode == .bySession)
+                    let actualTitle = isBySession
+                        ? L.t("Thực tế lần ngủ này", "Actual this Session")
+                        : L.t("Thực tế trong ngày (từ 00:00)", "Actual this Day (from 00:00)")
+
+                    let actualText: String = {
+                        if session.dropPercent > 0 {
+                            return "\(session.startBattery)% → \(session.endBattery)% (-\(session.dropPercent)%)"
+                        } else if session.endBattery > session.startBattery {
+                            return "\(session.startBattery)% → \(session.endBattery)% (+\(session.endBattery - session.startBattery)%)"
+                        } else {
+                            return "\(session.startBattery)% (0%)"
+                        }
+                    }()
+
                     sleepScenarioPill(
                         dotColor: .cyan,
-                        title: L.t("Thực tế (Chưa bật App)", "Actual (Unprotected)"),
-                        value: "\(session.startBattery)% → \(session.endBattery)% (-\(session.dropPercent)%)",
-                        valueColor: .red
+                        title: actualTitle,
+                        value: actualText,
+                        valueColor: session.dropPercent > 0 ? .red : .cyan
                     )
 
-                    sleepScenarioPill(
-                        dotColor: .green,
-                        title: L.t("Khi bật Auto-Unmount", "With Auto-Unmount"),
-                        value: L.t("Còn ~\(wakeAutoUnmount)% (-\(autoUnmountDrop)%)", "~\(wakeAutoUnmount)% left (-\(autoUnmountDrop)%)"),
-                        valueColor: .green
-                    )
+                    let hasDrain = (session.dropPercent >= 2)
+                    if hasDrain {
+                        sleepScenarioPill(
+                            dotColor: .green,
+                            title: isBySession ? L.t("Bật Auto-Unmount (Lần này)", "With Auto-Unmount") : L.t("Bật Auto-Unmount (Trong ngày)", "With Auto-Unmount"),
+                            value: L.t("Còn ~\(wakeAutoUnmount)% (-\(autoUnmountDrop)%)", "~\(wakeAutoUnmount)% left (-\(autoUnmountDrop)%)"),
+                            valueColor: .green
+                        )
 
-                    sleepScenarioPill(
-                        dotColor: .mint,
-                        title: L.t("Auto-Unmount + Chặn DarkWake", "Full Guard (No DarkWake)"),
-                        value: L.t("Còn ~\(wakeWithApp)% (-\(fullGuardDrop)%)", "~\(wakeWithApp)% left (-\(fullGuardDrop)%)"),
-                        valueColor: .mint
-                    )
+                        sleepScenarioPill(
+                            dotColor: .mint,
+                            title: isBySession ? L.t("Toàn diện (Lần này)", "Full Guard") : L.t("Toàn diện (Trong ngày)", "Full Guard"),
+                            value: L.t("Còn ~\(wakeWithApp)% (-\(fullGuardDrop)%)", "~\(wakeWithApp)% left (-\(fullGuardDrop)%)"),
+                            valueColor: .mint
+                        )
+                    } else {
+                        sleepScenarioPill(
+                            dotColor: .green,
+                            title: isBySession ? L.t("Đánh giá lần ngủ này", "Session Drain Status") : L.t("Đánh giá trong ngày", "Daily Drain Status"),
+                            value: L.t("Không hao pin / Cắm sạc", "No Drain / On AC"),
+                            valueColor: .green
+                        )
+                    }
                 }
 
-                let minBat = max(0, session.endBattery - 5)
-                let maxBat = min(100, session.startBattery + 2)
-                let totalSpan = max(1.0, session.endTime.timeIntervalSince(session.startTime))
-                let tickHeight = max(2, Int(Double(maxBat - minBat) * 0.10))
+                let allBat = session.events.map(\.batteryPercent)
+                let minObserved = allBat.min() ?? session.endBattery
+                let maxObserved = allBat.max() ?? session.startBattery
 
-                // Row 3: Clean Interactive Chart (No chaotic prison bars)
+                let rawMin = max(0, min(minObserved, session.endBattery, session.startBattery) - 3)
+                let rawMax = min(100, max(maxObserved, session.endBattery, session.startBattery) + 2)
+
+                let calcMin = (rawMin < rawMax) ? rawMin : max(0, rawMin - 5)
+                let calcMax = (rawMin < rawMax) ? rawMax : min(100, rawMin + 5)
+                let safeMinBat = min(calcMin, max(0, calcMax - 1))
+                let safeMaxBat = max(calcMax, safeMinBat + 1)
+
+                let totalSpan = max(1.0, session.endTime.timeIntervalSince(session.startTime))
+                let tickHeight = max(2, Int(Double(safeMaxBat - safeMinBat) * 0.10))
+                let hasDrain = (session.dropPercent >= 2)
+
+                // Row 3: Clean Interactive Chart (Crash-proof domain, real data)
                 Chart {
                     ForEach(session.events) { ev in
                         let progress = max(0.0, min(1.0, ev.timestamp.timeIntervalSince(session.startTime) / totalSpan))
@@ -803,7 +849,7 @@ public struct DashboardView: View {
 
                         AreaMark(
                             x: .value("Time", ev.timestamp),
-                            yStart: .value("Min", minBat),
+                            yStart: .value("Min", safeMinBat),
                             yEnd: .value("Pin %", ev.batteryPercent)
                         )
                         .foregroundStyle(
@@ -822,28 +868,30 @@ public struct DashboardView: View {
                         .foregroundStyle(.cyan)
                         .lineStyle(StrokeStyle(lineWidth: 2.6))
 
-                        LineMark(
-                            x: .value("Time", ev.timestamp),
-                            y: .value("Auto-Unmount (%)", predictedAutoUnmountPct),
-                            series: .value("Scenario", "Auto-Unmount")
-                        )
-                        .foregroundStyle(.green)
-                        .lineStyle(StrokeStyle(lineWidth: 2.0, dash: [6, 4]))
+                        if hasDrain {
+                            LineMark(
+                                x: .value("Time", ev.timestamp),
+                                y: .value("Auto-Unmount (%)", predictedAutoUnmountPct),
+                                series: .value("Scenario", "Auto-Unmount")
+                            )
+                            .foregroundStyle(.green)
+                            .lineStyle(StrokeStyle(lineWidth: 2.0, dash: [6, 4]))
 
-                        LineMark(
-                            x: .value("Time", ev.timestamp),
-                            y: .value("Full Guard (%)", predictedFullGuardPct),
-                            series: .value("Scenario", "Full Guard")
-                        )
-                        .foregroundStyle(.mint)
-                        .lineStyle(StrokeStyle(lineWidth: 2.0, dash: [3, 3]))
+                            LineMark(
+                                x: .value("Time", ev.timestamp),
+                                y: .value("Full Guard (%)", predictedFullGuardPct),
+                                series: .value("Scenario", "Full Guard")
+                            )
+                            .foregroundStyle(.mint)
+                            .lineStyle(StrokeStyle(lineWidth: 2.0, dash: [3, 3]))
+                        }
 
                         // Thanh vạch nhỏ gọn ở đáy biểu đồ thể hiện mật độ DarkWake mà không che khuất đường Pin
                         if ev.kind != .sleep {
                             RuleMark(
                                 x: .value("Time", ev.timestamp),
-                                yStart: .value("TickStart", minBat),
-                                yEnd: .value("TickEnd", minBat + tickHeight)
+                                yStart: .value("TickStart", safeMinBat),
+                                yEnd: .value("TickEnd", min(safeMaxBat, safeMinBat + tickHeight))
                             )
                             .foregroundStyle(ev.kind == .darkWake ? Color.orange.opacity(0.55) : Color.red.opacity(0.75))
                             .lineStyle(StrokeStyle(lineWidth: 1.5))
@@ -871,7 +919,7 @@ public struct DashboardView: View {
                         }
                     }
                 }
-                .chartYScale(domain: minBat...maxBat)
+                .chartYScale(domain: safeMinBat...safeMaxBat)
                 .chartXAxis {
                     AxisMarks(values: .automatic(desiredCount: 9)) { _ in
                         AxisGridLine()

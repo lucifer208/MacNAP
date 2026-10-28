@@ -3,4 +3,6 @@
 MacNAP.app/
 .DS_Store
 logs/
+releases/*.zip
+releases/*.dmg
 

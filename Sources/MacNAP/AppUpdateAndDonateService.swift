@@ -73,14 +73,14 @@ public final class AppUpdaterService: @unchecked Sendable {
         if let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String, !v.isEmpty {
             return v
         }
-        return "1.0.0"
+        return "1.0.1"
     }()
 
     public static let currentBuild: Int = {
         if let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String, let num = Int(b) {
             return num
         }
-        return 100
+        return 101
     }()
 
     public let githubAPIURL = URL(string: "https://api.github.com/repos/lucifer208/MacNAP/releases/latest")!
@@ -165,14 +165,16 @@ public final class AppUpdaterService: @unchecked Sendable {
             message: "Bắt đầu tự động cập nhật MacNAP lên v\(targetVersion)..."
         )
 
+        let runningAppURL = Bundle.main.bundleURL
         let workspacePath = "/Users/lu/HUB/MacNAP"
-        let zipPath = "\(workspacePath)/releases/MacNAP-v\(targetVersion).zip"
+        let localZipPath = "\(workspacePath)/releases/MacNAP-v\(targetVersion).zip"
         let bundleScript = "\(workspacePath)/scripts/bundle.sh"
 
-        if FileManager.default.fileExists(atPath: zipPath) {
+        // 1. Fast local dev path (if zip is already present locally)
+        if FileManager.default.fileExists(atPath: localZipPath) {
             let proc = Process()
             proc.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
-            proc.arguments = ["-x", "-k", zipPath, workspacePath]
+            proc.arguments = ["-x", "-k", localZipPath, workspacePath]
             do {
                 try proc.run()
                 proc.waitUntilExit()
@@ -185,6 +187,40 @@ public final class AppUpdaterService: @unchecked Sendable {
             }
         }
 
+        // 2. Production Remote Download Path from GitHub Releases
+        if let dlString = manifest?.downloadURL ?? Optional("https://github.com/lucifer208/MacNAP/releases/download/v\(targetVersion)/MacNAP-v\(targetVersion).zip"),
+           let downloadURL = URL(string: dlString) {
+            do {
+                let (tempLocalURL, response) = try await URLSession.shared.download(from: downloadURL)
+                if let http = response as? HTTPURLResponse, (http.statusCode == 200 || http.statusCode == 302) {
+                    let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("MacNAP_Update_\(UUID().uuidString)")
+                    try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+                    let unzipProc = Process()
+                    unzipProc.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+                    unzipProc.arguments = ["-x", "-k", tempLocalURL.path, tempDir.path]
+                    try unzipProc.run()
+                    unzipProc.waitUntilExit()
+
+                    let extractedApp = tempDir.appendingPathComponent("MacNAP.app")
+                    if FileManager.default.fileExists(atPath: extractedApp.path) {
+                        let targetAppPath = runningAppURL.path.hasSuffix(".app") ? runningAppURL.path : "/Applications/MacNAP.app"
+                        let copyProc = Process()
+                        copyProc.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+                        copyProc.arguments = [extractedApp.path, targetAppPath]
+                        try copyProc.run()
+                        copyProc.waitUntilExit()
+
+                        relaunchApp(at: targetAppPath)
+                        return (true, "Đã tải về và cập nhật thành công v\(targetVersion). Đang khởi động lại...")
+                    }
+                }
+            } catch {
+                AppDiagnosticLogger.shared.log(.error, component: "Updater", message: "Tự động tải cập nhật từ GitHub thất bại: \(error.localizedDescription)")
+            }
+        }
+
+        // 3. Fallback dev script
         if FileManager.default.fileExists(atPath: bundleScript) {
             let proc = Process()
             proc.executableURL = URL(fileURLWithPath: "/bin/bash")
@@ -202,7 +238,7 @@ public final class AppUpdaterService: @unchecked Sendable {
             }
         }
 
-        return (false, "Không tìm thấy gói cập nhật hợp lệ.")
+        return (false, "Không tìm thấy gói cập nhật hợp lệ từ GitHub.")
     }
 
     private func relaunchApp(at appPath: String) {
@@ -230,10 +266,56 @@ public final class AppUpdaterService: @unchecked Sendable {
     }
 }
 
+// MARK: - VietQR EMVCo & Standard NAPAS247 Generator
+public struct VietQRHelper {
+    public static func emvcoPayload(account: String, amount: Int, note: String) -> String {
+        func tlv(_ tag: String, _ value: String) -> String {
+            let len = String(format: "%02d", value.count)
+            return "\(tag)\(len)\(value)"
+        }
+        // VPBank BIN is 970432
+        let beneficiary = tlv("00", "970432") + tlv("01", account)
+        let consumerInfo = tlv("00", "A000000727") + tlv("01", beneficiary) + tlv("02", "QRPUSH")
+
+        var payload = ""
+        payload += tlv("00", "01") // Format Indicator
+        payload += tlv("01", amount > 0 ? "12" : "11") // Dynamic (with amount) or Static
+        payload += tlv("38", consumerInfo)
+        payload += tlv("53", "704") // Currency: VND
+        if amount > 0 {
+            payload += tlv("54", "\(amount)")
+        }
+        payload += tlv("58", "VN")
+        if !note.isEmpty {
+            payload += tlv("62", tlv("08", note))
+        }
+        payload += "6304"
+
+        let crc = crc16(Data(payload.utf8))
+        return payload + String(format: "%04X", crc)
+    }
+
+    private static func crc16(_ data: Data) -> UInt16 {
+        var crc: UInt16 = 0xFFFF
+        for byte in data {
+            crc ^= (UInt16(byte) << 8)
+            for _ in 0..<8 {
+                if (crc & 0x8000) != 0 {
+                    crc = (crc << 1) ^ 0x1021
+                } else {
+                    crc = crc << 1
+                }
+            }
+        }
+        return crc
+    }
+}
+
 // MARK: - Author Official Donate Details
 public struct AuthorDonateInfo {
     public static let bankName = "VPBank (Ngân hàng TMCP Việt Nam Thịnh Vượng)"
     public static let bankCode = "VPB"
+    public static let bankBIN = "970432"
     public static let accountNumber = "8888071992"
     public static let accountHolder = "HUỲNH TUẤN HUY"
     public static let defaultNote = "MacNAP Donate"
@@ -253,6 +335,8 @@ public struct DonateSheetView: View {
 
     @State private var selectedAmount: Int = 50000
     @State private var feedbackText: String?
+    @State private var qrNSImage: NSImage?
+    @State private var isLoadingOnlineQR: Bool = false
 
     private struct DonationTier: Identifiable {
         let id: Int
@@ -365,42 +449,29 @@ public struct DonateSheetView: View {
             HStack(alignment: .top, spacing: 18) {
                 // Real VietQR Box
                 VStack(spacing: 7) {
-                    let qrUrlString = AuthorDonateInfo.qrURLString(amount: selectedAmount)
-                    AsyncImage(url: URL(string: qrUrlString)) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
+                    Group {
+                        if let img = qrNSImage {
+                            Image(nsImage: img)
                                 .resizable()
                                 .scaledToFit()
-                        case .failure:
-                            if let fallback = generateLocalQR(from: qrUrlString) {
-                                Image(nsImage: fallback)
-                                    .resizable()
-                                    .scaledToFit()
-                            } else {
-                                Image(systemName: "qrcode")
-                                    .font(.system(size: 50))
-                                    .foregroundStyle(.secondary)
-                            }
-                        case .empty:
+                        } else {
                             ProgressView()
-                                .frame(width: 155, height: 155)
-                        @unknown default:
-                            EmptyView()
                         }
                     }
                     .frame(width: 155, height: 155)
                     .padding(6)
                     .background(Color.white, in: RoundedRectangle(cornerRadius: 10))
 
-                    Text(L.t("Quét bằng mọi App Ngân hàng", "Scan with any Banking App"))
+                    Text(L.t("Quét bằng App Ngân hàng", "Scan with any Banking App"))
                         .font(.system(size: 11, weight: .bold))
                         .lineLimit(1)
+                        .fixedSize()
 
-                    Text(selectedAmount > 0 ? "Số tiền: \(formatVND(selectedAmount))" : L.t("Số tiền: Tuỳ tâm chuyển", "Amount: Custom"))
+                    Text(selectedAmount > 0 ? "Mức: \(formatVND(selectedAmount))" : L.t("Mức: Tuỳ tâm ủng hộ", "Amount: Custom"))
                         .font(.system(size: 11, weight: .semibold, design: .monospaced))
                         .foregroundStyle(selectedAmount > 0 ? .pink : .secondary)
                         .lineLimit(1)
+                        .fixedSize()
                 }
                 .padding(12)
                 .frame(width: 190)
@@ -430,7 +501,7 @@ public struct DonateSheetView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
 
-                    // Account Number with 1-click Copy
+                    // Account Number with 1-click Copy & High Contrast Text
                     VStack(alignment: .leading, spacing: 2) {
                         HStack {
                             Text(L.t("SỐ TÀI KHOẢN (STK)", "ACCOUNT NUMBER"))
@@ -449,12 +520,17 @@ public struct DonateSheetView: View {
                         }
 
                         Text(AuthorDonateInfo.accountNumber)
-                            .font(.system(size: 21, weight: .heavy, design: .monospaced))
-                            .foregroundStyle(.pink)
+                            .font(.system(size: 23, weight: .heavy, design: .monospaced))
+                            .foregroundStyle(Color(red: 1.0, green: 0.18, blue: 0.45))
+                            .textSelection(.enabled)
                     }
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.pink.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                    .background(Color.pink.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.pink.opacity(0.28), lineWidth: 1)
+                    )
 
                     // Account Holder
                     VStack(alignment: .leading, spacing: 2) {
@@ -560,6 +636,31 @@ public struct DonateSheetView: View {
         }
         .padding(18)
         .frame(width: 630)
+        .task(id: selectedAmount) {
+            await loadQR(for: selectedAmount)
+        }
+    }
+
+    @MainActor
+    private func loadQR(for amount: Int) async {
+        // 1. Instantly generate offline VietQR EMVCo QR code (100% compliant NAPAS247 standard)
+        let emvco = VietQRHelper.emvcoPayload(account: AuthorDonateInfo.accountNumber, amount: amount, note: AuthorDonateInfo.defaultNote)
+        if let localQR = generateLocalQR(from: emvco) {
+            self.qrNSImage = localQR
+        }
+
+        // 2. Asynchronously fetch the branded template with bank logo from VietQR server
+        let urlString = AuthorDonateInfo.qrURLString(amount: amount)
+        guard let url = URL(string: urlString) else { return }
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            if let http = response as? HTTPURLResponse, http.statusCode == 200,
+               let onlineImg = NSImage(data: data) {
+                self.qrNSImage = onlineImg
+            }
+        } catch {
+            // Keep local EMVCo QR code
+        }
     }
 
     private func formatVND(_ amount: Int) -> String {

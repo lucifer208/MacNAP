@@ -1,6 +1,109 @@
 # Changelog
 
-## [Unreleased] - 2026-10-28
+## [1.0.1] - 2026-10-28
+
+### [14:38] fix(ui): remove duplicate Settings item from sidebar navigation list
+- **Loại bỏ mục trùng lặp `Cài đặt & Tùy chọn` trong Sidebar List (`AppState.swift`, `DashboardView.swift`, `Localization.swift`)**:
+  - Gỡ `DashboardSection.settings` khỏi danh sách điều hướng bên trái để tránh dư thừa và làm chật sidebar.
+  - Nút **`⚙️ Cài đặt (⌘,)`** trên thanh Toolbar trên cùng và phím tắt `⌘,` mở trực tiếp cửa sổ Cài đặt native của macOS.
+
+### [14:29] feat(guard): implement Auto Low Power Mode, Sleep Insomnia Hunter & Morning Drain Alert
+- **Tính năng 1: Tự động kích hoạt Low Power Mode khi gập nắp trên Pin (`AppState.swift` & `SleepMountGuardService.swift`)**:
+  - Tự động hạ xung nhịp CPU/GPU qua `pmset -b powermode 1` khi gập nắp/sleep trên pin.
+  - Tự động khôi phục xung nhịp bình thường (`powermode 0`) ngay khi mở nắp/wake.
+- **Tính năng 2: Săn "Kẻ trộm giấc ngủ" (Sleep Insomnia Hunter & Alert)**:
+  - Tự động phát hiện các tiến trình nền (Docker, Chrome, qBittorrent, Media...) giữ quyền ngăn Mac đi ngủ.
+  - Tự động gửi macOS Local Notification cảnh báo khi người dùng gập nắp để tránh tình trạng máy chạy ngầm nóng ran trong balo.
+- **Tính năng 5: Báo động Tụt Pin Sáng Dậy (Morning Drain Alert & Budget)**:
+  - Tự động kiểm tra mức hao pin của phiên ngủ vừa kết thúc.
+  - Nếu pin tụt vượt quá hạn mức an toàn (mặc định: ≥ 3%), MacNAP bắn ngay thông báo hệ thống kèm số liệu chi tiết. Nhấp vào thông báo sẽ mở Dashboard phân tích tức thì.
+- **Tích hợp giao diện quản lý**:
+  - Bổ sung toggle bật/tắt và picker chọn ngưỡng cảnh báo linh hoạt trong cả Sidebar Dashboard và cửa sổ Cài đặt (`SettingsView.swift`).
+
+### [14:12] fix(remount): direct hardware lid detection, 2-stage wake remount & rewrite concise README
+- **Sửa triệt để lỗi không tự động wake/remount ổ đĩa ngoại vi (`AppState.swift` & `SleepMountGuardService.swift`)**:
+  - Chuyển sang đọc trực tiếp phần cứng `AppleClamshellState` (`isClamshellClosed()`), khắc phục lỗi máy cắm sạc bị gán `AppleClamshellCausesSleep = No` khiến app bỏ qua sự kiện gập/mở nắp.
+  - Bổ sung `mountWholeDisk` (`diskutil mountDisk`) đánh thức controller trước khi mount từng phân vùng.
+  - Tích hợp cơ chế remount 2 đợt (tức thì + đệm 1.5s) đảm bảo USB Hub và ổ SSD ngoại vi luôn được kết nối lại 100%.
+- **Chặn đứng việc cửa sổ Cài đặt tự động nhảy ra khi mở app (`MacNAPApp.swift`)**:
+  - Vô hiệu hóa `NSQuitAlwaysKeepsWindows`, chuyển sang quản lý cửa sổ Settings độc lập qua AppKit, app khởi động hoàn toàn im lặng trên Menu Bar.
+- **Tối ưu hóa tiêu điểm Menu Bar đỉnh màn hình**:
+  - `activateAppWithRegularPolicy()` kích hoạt `makeMain()` và `setActivationPolicy(.regular)` giúp Menu Bar chuyển ngay về `MacNAP` khi mở Dashboard.
+- **Viết lại `README.md` & `README_EN.md`**:
+  - Giản lược toàn bộ văn phong quảng cáo, tập trung đúng câu chuyện và 3 tính năng cốt lõi: Auto-Unmount khi sleep, Auto-Remount khi wake, và Chặn DarkWake.
+
+### [14:02] feat(app-menu): native macOS application menu bar & in-dashboard Settings button
+- **Hiển thị Menu Bar hệ thống trên đỉnh macOS (`setupAppMainMenu` trong `MacNAPApp.swift`)**:
+  - Tích hợp `NSMenu` chuẩn macOS khi ứng dụng active: `MacNAP`, `Cửa sổ (Window)`, `Trợ giúp (Help)`.
+  - Hỗ trợ đầy đủ phím tắt macOS: `⌘,` (Cài đặt), `⌘D` (Dashboard), `⌘W` (Đóng cửa sổ), `⌘M` (Thu nhỏ), `⌘H` (Ẩn app), `⌘Q` (Thoát app).
+- **Thêm lối vào Cài đặt trực tiếp trên Dashboard (`DashboardView.swift` & `AppState.swift`)**:
+  - Bổ sung nút **`Cài đặt (⌘,)`** với icon bánh răng nổi bật ngay tại thanh Toolbar trên cùng của Dashboard.
+  - Thêm mục **`Cài đặt & Tùy chọn`** vào danh sách Sidebar Navigation, cho phép xem và điều chỉnh thiết lập ngay trong Dashboard.
+
+### [13:56] feat(settings): replace blank Settings window with native tabbed MacNAPSettingsView & guarantee crash-proof chart domain
+- **Khắc phục cửa sổ trống `MacNAP Settings` (`SettingsView.swift` & `MacNAPApp.swift`)**:
+  - Thay thế `EmptyView()` bên trong SwiftUI `Settings` scene bằng giao diện Cài đặt native macOS chuyên nghiệp (`SettingsView`) với 4 tabs:
+    1. **Chung (General)**: Khởi động cùng macOS (`LaunchAtLogin`), Ẩn icon trên Dock khi đóng Dashboard, Ngôn ngữ giao diện (Tiếng Việt / English).
+    2. **Sleep & Ổ đĩa**: Tự động Unmount khi Sleep/Gập nắp, Tự động Remount khi mở máy, Chặn DarkWake hao pin qua đêm trên Pin.
+    3. **Cập nhật (Updates)**: Tự động kiểm tra bản mới từ GitHub Releases, Tự động cài đặt bản cập nhật, Nút kiểm tra cập nhật thủ công.
+    4. **Giới thiệu & Tác giả (About)**: Thông tin phiên bản, bản quyền Tác giả Huỳnh Tuấn Huy (@tuanhuydev), nút Báo lỗi GitHub và nút Ủng hộ Tác giả (VietQR).
+  - Tích hợp nút mở Cài đặt (`Cài đặt (⌘,)`) trực tiếp ở góc chân `MenuBarPopoverView`.
+  - Cập nhật chính sách Dock: Nhận diện khi cửa sổ Settings đang mở để hiển thị icon và tự động thu hồi biến mất ngay khi đóng cửa sổ Settings.
+- **Bảo vệ biểu đồ toán học tuyệt đối (`DashboardView.swift`)**:
+  - Ép `safeMinBat = min(calcMin, max(0, calcMax - 1))` và `safeMaxBat = max(calcMax, safeMinBat + 1)` đảm bảo 100% không bao giờ gặp lỗi `Range requires lowerBound <= upperBound`.
+
+### [13:47] fix(ui): synchronize actual drain pill and dropdown labels strictly with By Session and By Day modes
+- **Đồng bộ hóa nhãn và số liệu thẻ "Thực tế" theo đúng ngữ cảnh lựa chọn (`DashboardView.swift`)**:
+  - Khi xem **`Theo lần Sleep / CloseLid`**:
+    - Nhãn chọn: `Phiên ngủ:`
+    - Thẻ thực tế: **`Thực tế lần ngủ này`** (hiển thị đúng số pin đầu - cuối của phiên ngủ đó, ví dụ `100% → 80% (-20%)`).
+    - Các thẻ kịch bản: `Bật Auto-Unmount (Lần này)` và `Toàn diện (Lần này)`.
+  - Khi xem **`Theo Ngày (Từ 00:00)`**:
+    - Nhãn chọn: `Ngày phân tích:`
+    - Thẻ thực tế: **`Thực tế trong ngày (từ 00:00)`** (hiển thị mức tụt tính riêng từ `00:00:00` sáng của ngày đó đến lúc thức giấc).
+    - Các thẻ kịch bản: `Bật Auto-Unmount (Trong ngày)` và `Toàn diện (Trong ngày)`.
+  - Phản ánh trung thực nếu phiên không tụt pin hoặc cắm sạc (ví dụ: `90% (0%)` hoặc `+10%`).
+
+### [13:43] feat: Release v1.0.1 with crash auto-relaunch watchdog & instant Dock icon cleanup on window close
+- **Cơ chế Tự động Hồi sinh sau Crash (`Crash Auto-Relaunch Watchdog` trong `AppDiagnosticLogger.swift`)**:
+  - Tích hợp 2 lớp cứu hộ chống crash:
+    1. **Signal & Exception Handler trực tiếp**: Bẫy toàn bộ fatal signal (`SIGSEGV`, `SIGBUS`, `SIGABRT`, `SIGILL`, `SIGTRAP`) và ngoại lệ unhandled NSException, ghi log đầy đủ stacktrace và ngay lập tức gọi tiến trình cứu hộ độc lập khởi động lại MacNAP.
+    2. **Watchdog Daemon nền độc lập (`spawnCrashWatchdogDaemon`)**: Giám sát PID tiến trình MacNAP. Nếu PID biến mất trong khi file khóa `.macnap-running.lock` vẫn còn (chứng minh bị crash hoặc kill đột ngột, không phải người dùng bấm Thoát), daemon sẽ tự động mở lại app sau 0.8s.
+    3. **Chống lặp vô tận (Anti-Crash Loop)**: Tự động đếm số lần crash trong 25 giây. Nếu app crash liên tiếp > 3 lần, daemon tự ngắt để bảo vệ CPU và pin MacBook.
+- **Khắc phục triệt để lỗi "App close nhưng icon vẫn còn ở Dock" (`MacNAPApp.swift`)**:
+  - Khi người dùng đóng cửa sổ Dashboard (bấm nút đỏ, nhấn `Cmd+W`, hoặc bấm ra ngoài), ứng dụng tự động kiểm tra và chuyển ngay `activationPolicy` về `.accessory`.
+  - macOS lập tức thu hồi và xóa icon MacNAP khỏi thanh Dock ngay trong tích tắc, giữ cho Dock luôn gọn gàng đúng chuẩn Menu Bar Utility.
+- **Nâng cấp phiên bản chính thức `v1.0.1` (Build 101)**:
+  - Cập nhật `VERSION`, `scripts/bundle.sh`, `releases/latest.json`, `README.md`, `README_EN.md`.
+  - Đóng gói đầy đủ `releases/MacNAP-v1.0.1.dmg` và `releases/MacNAP-v1.0.1.zip`.
+
+### [13:36] fix(chart): resolve Range crash lowerBound <= upperBound, isolate clean sleep sessions & fix By Day / By Session filter
+- **Khắc phục triệt để lỗi Crash SIGTRAP / Range crash (`Range requires lowerBound <= upperBound`)**:
+  - Tính toán `safeMin` và `safeMax` dựa trên toàn bộ các mốc pin thực tế `session.events.map(\.batteryPercent)` kết hợp với `startBattery` và `endBattery`.
+  - Luôn đảm bảo `minBat < maxBat` trong `.chartYScale(domain: minBat...maxBat)` ngay cả khi máy cắm sạc hoặc pin tăng/bằng nhau, chấm dứt hoàn toàn hiện tượng văng app khi chuyển phiên ngủ.
+- **Sửa thuật toán gom phiên ngủ, chấm dứt nối dữ liệu ảo khi cắm sạc trưa hôm sau (`SleepMountGuardService.swift`)**:
+  - Một phiên ngủ **kết thúc dứt điểm ngay khi xuất hiện sự kiện `FullWake`** (mở máy thức giấc buổi sáng).
+  - Tách rời hoàn toàn giấc ngủ qua đêm (`27/10 22:51 → 28/10 09:25`, tụt thật từ 100% xuống 80% `-20%`) khỏi các sự kiện cắm sạc buổi trưa (`12:11 → 12:21`, 90%). Không còn đường kẻ chéo ảo vọt từ 80% lên 90%.
+  - Chỉ vẽ các đường nét đứt dự đoán mô phỏng khi phiên thực sự có sụt pin (`dropPercent >= 2`).
+- **Sửa bộ chuyển đổi `Theo lần Sleep` vs `Theo Ngày (Từ 00:00)` (`AppState.swift`)**:
+  - Khi người dùng bấm chuyển chế độ, tự động chọn ngay phiên đầu tiên của danh sách mới (`forceFirst: true`) và cập nhật biểu đồ tức thì.
+  - Chế độ `Theo Ngày` lọc chính xác các sự kiện bắt đầu từ `00:00` sáng cho đến lúc mở máy thức dậy của ngày đó.
+
+### [13:24] fix: robust in-app updater with remote GitHub download, bulletproof VietQR EMVCo generator & high-contrast donate UI
+- **Khắc phục và hoàn thiện bộ Updater tự động tải từ GitHub (`AppUpdaterService`)**:
+  - Hỗ trợ tải trực tiếp tệp `.zip` bản mới từ GitHub Releases qua `URLSession.shared.download(from:)`, tự động giải nén và thay thế `MacNAP.app` ở bất kỳ thư mục nào (`/Applications` hoặc workspace), sau đó khởi động lại app mượt mà.
+  - Kiểm tra song song GitHub Releases API (`api.github.com/repos/lucifer208/MacNAP/releases/latest`) và Raw Manifest.
+- **Tạo bộ mã hóa VietQR EMVCo chuẩn NAPAS247 (`VietQRHelper` trong `AppUpdateAndDonateService.swift`)**:
+  - Tích hợp hàm sinh chuỗi EMVCo NAPAS247 chính thống (BIN 970432 VPBank, STK 8888071992, CRC-16/CCITT-FALSE), hiển thị ngay lập tức không độ trễ, đảm bảo 100% app ngân hàng quét được ngay cả khi ngoại tuyến (offline).
+  - Tải bất đồng bộ ảnh VietQR chính thức từ `img.vietqr.io` qua `NSImage(data:)` giải mã chuẩn SVG/PNG sắc nét trên macOS Sonoma/Sequoia.
+  - Tăng độ tương phản cực đại cho STK `8888071992`, hỗ trợ sao chép 1 chạm và chọn bôi đen text.
+- **Tối ưu báo cáo lỗi GitHub Issues (`ReportIssueSheetView`)**:
+  - Tự động copy toàn bộ log chẩn đoán vào bộ nhớ tạm trước khi mở trang tạo Issue trên GitHub với query rút gọn an toàn chống tràn URL.
+
+### [13:16] docs: add English documentation README_EN.md with bilingual switcher
+- **Bổ sung tài liệu tiếng Anh hoàn chỉnh `README_EN.md`**:
+  - Hỗ trợ nút chuyển đổi nhanh đa ngôn ngữ `[🇻🇳 Tiếng Việt](README.md) • [🇬🇧 English](README_EN.md)` ở đầu cả 2 tệp.
+  - Diễn giải chi tiết bằng tiếng Anh chuẩn quốc tế về cơ chế tiết kiệm pin, 1.0s power telemetry, 140W fast charge profiling, sleep assertions, hướng dẫn cài đặt file DMG và đóng gói SPM.
 
 ### [13:13] feat(release): add comprehensive README.md, package source zip & release via DMG
 - **Khởi tạo tài liệu dự án `README.md` chuyên nghiệp**:

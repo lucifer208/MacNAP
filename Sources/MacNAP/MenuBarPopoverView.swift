@@ -320,11 +320,25 @@ public struct MenuBarPopoverView: View {
                 }
             }
 
-            // 2. Sleek Bottom Bar (Version info on left, Quit button on right)
-            HStack {
-                Text("MacNAP v\(state.appVersion)")
+            // 2. Sleek Bottom Bar (Version info on left, Settings in center, Quit button on right)
+            HStack(spacing: 8) {
+                Text("v\(state.appVersion)")
                     .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
                     .foregroundStyle(.tertiary)
+
+                Button {
+                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                    NSApp.activate(ignoringOtherApps: true)
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 10))
+                        Text(L.t("Cài đặt", "Settings"))
+                            .font(.system(size: 10.5, weight: .medium))
+                    }
+                    .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
 
                 Spacer()
 
