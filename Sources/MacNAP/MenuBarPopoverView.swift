@@ -76,20 +76,34 @@ public struct MenuBarPopoverView: View {
             }
             .buttonStyle(.plain)
 
-            // 2. Live 2x2 Power Telemetry Grid
-            HStack(spacing: 8) {
-                miniMetricBox(
-                    icon: "bolt.fill",
-                    color: .orange,
-                    label: "System Total",
-                    value: String(format: "%.2f W", state.systemLoadWatts)
-                )
-                miniMetricBox(
-                    icon: "powerplug.fill",
-                    color: .green,
-                    label: "DC In",
-                    value: String(format: "%.2f W", state.externalConnected ? state.adapterWatts : 0.0)
-                )
+            // 2. Live 2x2 Power Telemetry Grid + Peripheral & Power Routing Detail
+            VStack(spacing: 6) {
+                HStack(spacing: 8) {
+                    miniMetricBox(
+                        icon: "bolt.fill",
+                        color: .orange,
+                        label: String(format: "System (Ngoại vi %.2fW)", state.peripheralsTotalWatts),
+                        value: String(format: "%.2f W", state.systemLoadWatts)
+                    )
+                    miniMetricBox(
+                        icon: "powerplug.fill",
+                        color: .green,
+                        label: "DC In (Max \(state.macMaxSupportedWatts)W)",
+                        value: String(format: "%.2f W", state.externalConnected ? state.adapterWatts : 0.0)
+                    )
+                }
+
+                HStack {
+                    Text(state.powerSupplyStatusText)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Spacer()
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 7))
             }
 
             // 2.5 Sleep Mode Switcher + Clear Overnight Comparison Pill

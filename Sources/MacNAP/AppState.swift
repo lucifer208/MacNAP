@@ -58,7 +58,10 @@ public final class AppState: ObservableObject {
     @Published public var adapterWatts: Double = 0.0
     @Published public var tbLeftWatts: Double = 0.0
     @Published public var tbRightWatts: Double = 0.0
+    @Published public var portOutWatts: Double = 0.0
     @Published public var adapterMaxWatts: Int = 100
+    @Published public var macMaxSupportedWatts: Int = 140
+    @Published public var macModelSummary: String = "Apple M1 Max (140W)"
     @Published public var peripheralsTotalWatts: Double = 0.0
     @Published public var peripheralsSleepWatts: Double = 0.0
     @Published public var voltageV: Double = 12.0
@@ -347,7 +350,10 @@ public final class AppState: ObservableObject {
             self.adapterWatts = p.dcInW
             self.tbLeftWatts = p.tbLeftW
             self.tbRightWatts = p.tbRightW
+            self.portOutWatts = p.portOutW
             self.adapterMaxWatts = p.adapterMaxWatts
+            self.macMaxSupportedWatts = p.macMaxSupportedWatts
+            self.macModelSummary = p.macModelSummary
             self.peripherals = scannedPeripherals
             self.peripheralsTotalWatts = periphW
             self.peripheralsSleepWatts = periphSleepW
@@ -664,5 +670,53 @@ public final class AppState: ObservableObject {
         let actualDrop = realLastNightDropPercent
         let newDrop = max(1, Int(round(predictedDropPercentWithFullGuard)))
         return max(1, actualDrop - newDrop)
+    }
+
+    /// Trạng thái nguồn chi tiết (Đang sạc vào Pin vs Đang dùng nguồn trực tiếp vs Đang xả từ Pin)
+    public var powerSupplyStatusText: String {
+        let L = l10n
+        if externalConnected {
+            if isCharging || batteryNetWatts >= 1.5 {
+                let chgW = max(0.0, batteryNetWatts > 0 ? batteryNetWatts : max(0.0, adapterWatts - systemLoadWatts))
+                return L.t(
+                    String(format: "⚡ Đang sạc vào Pin (+%.2f W) • Nuôi máy trực tiếp: %.2f W", chgW, systemLoadWatts),
+                    String(format: "⚡ Charging Battery (+%.2f W) • Direct System: %.2f W", chgW, systemLoadWatts)
+                )
+            } else {
+                let trickleW = max(0.0, batteryNetWatts)
+                return L.t(
+                    String(format: "🔌 Dùng nguồn trực tiếp (Sạc duy trì vào Pin: +%.2f W)", trickleW),
+                    String(format: "🔌 Direct AC Power (Battery trickle: +%.2f W)", trickleW)
+                )
+            }
+        } else {
+            return L.t(
+                String(format: "🔋 Đang dùng Pin (Xả từ Pin: -%.2f W)", max(systemLoadWatts, abs(batteryNetWatts))),
+                String(format: "🔋 On Battery (Discharging: -%.2f W)", max(systemLoadWatts, abs(batteryNetWatts)))
+            )
+        }
+    }
+
+    public var powerSupplyShortLabel: String {
+        let L = l10n
+        if externalConnected {
+            if isCharging || batteryNetWatts >= 1.5 {
+                let chgW = max(0.0, batteryNetWatts > 0 ? batteryNetWatts : max(0.0, adapterWatts - systemLoadWatts))
+                return L.t(
+                    String(format: "Sạc vào Pin (+%.2fW)", chgW),
+                    String(format: "Charging (+%.2fW)", chgW)
+                )
+            } else {
+                return L.t(
+                    String(format: "Nguồn trực tiếp (+%.2fW Pin)", max(0.0, batteryNetWatts)),
+                    String(format: "Direct AC (+%.2fW Bat)", max(0.0, batteryNetWatts))
+                )
+            }
+        } else {
+            return L.t(
+                String(format: "Xả từ Pin (-%.2fW)", max(systemLoadWatts, abs(batteryNetWatts))),
+                String(format: "Discharging (-%.2fW)", max(systemLoadWatts, abs(batteryNetWatts)))
+            )
+        }
     }
 }

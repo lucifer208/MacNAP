@@ -70,7 +70,7 @@ public struct DashboardView: View {
             // Grouped & Perfectly Aligned Sidebar Footer
             VStack(alignment: .leading, spacing: 10) {
                 // Cluster 1: Live Power Telemetry
-                VStack(spacing: 6) {
+                VStack(spacing: 5) {
                     sidebarMetricRow(
                         icon: "bolt.fill",
                         color: .orange,
@@ -78,10 +78,22 @@ public struct DashboardView: View {
                         value: String(format: "%.2f W", state.systemLoadWatts)
                     )
                     sidebarMetricRow(
+                        icon: "cable.connector.horizontal",
+                        color: .pink,
+                        label: L.t("Ngoại vi (USB/TB)", "Peripherals"),
+                        value: String(format: "%.2f W", state.peripheralsTotalWatts)
+                    )
+                    sidebarMetricRow(
                         icon: "powerplug.fill",
                         color: .green,
-                        label: "DC In",
+                        label: "DC In (Max \(state.macMaxSupportedWatts)W)",
                         value: String(format: "%.2f W", state.externalConnected ? state.adapterWatts : 0.0)
+                    )
+                    sidebarMetricRow(
+                        icon: state.externalConnected ? "bolt.Batteryblock.fill" : "battery.50",
+                        color: state.externalConnected ? .mint : .yellow,
+                        label: L.t("Chế độ nguồn", "Power Mode"),
+                        value: state.powerSupplyShortLabel
                     )
                     sidebarMetricRow(
                         icon: "battery.75percent",
@@ -239,8 +251,12 @@ public struct DashboardView: View {
 
     private var peripheralsContent: some View {
         VStack(alignment: .leading, spacing: 18) {
+            peripheralsKpiRow
+            HStack(spacing: 16) {
+                peripheralsRealtimeLineCard
+                realtimeBarComparisonCard
+            }
             peripheralsSection
-            realtimeBarComparisonCard
         }
     }
 
@@ -250,7 +266,7 @@ public struct DashboardView: View {
         }
     }
 
-    // MARK: - Equal-Height Bento KPI Grid (4 columns)
+    // MARK: - Equal-Height Bento KPI Grid (4 columns, Zero Truncation)
     private var kpiGrid: some View {
         let L = state.l10n
         let s = state.currentSleepSession
@@ -265,12 +281,18 @@ public struct DashboardView: View {
 
         return HStack(spacing: 14) {
             kpiCard(
-                title: L.kpiSystemTotal,
+                title: L.t("CÔNG SUẤT TIÊU THỤ (SYSTEM)", "SYSTEM TOTAL POWER"),
                 mainValue: String(format: "%.2f W", state.systemLoadWatts),
                 badgeText: L.t("Pin \(state.batteryPercent)%", "Bat \(state.batteryPercent)%"),
                 badgeColor: .orange,
-                footerLine1: String(format: "TB Right: %.2fW • TB Left: %.2fW", state.tbRightWatts, state.tbLeftWatts),
-                footerLine2: L.t("Cảm biến AppleSMC (PSTR • 1.0s)", "AppleSMC Sensor (PSTR • 1.0s)"),
+                footerLine1: L.t(
+                    String(format: "🔌 Thiết bị ngoại vi: %.2f W • Core: %.2f W", state.peripheralsTotalWatts, state.cpuCoreWatts),
+                    String(format: "🔌 Peripherals: %.2f W • Core: %.2f W", state.peripheralsTotalWatts, state.cpuCoreWatts)
+                ),
+                footerLine2: L.t(
+                    String(format: "Cổng USB-C Out: %.2f W • Unmount còn: %.2f W", state.portOutWatts, state.peripheralsSleepWatts),
+                    String(format: "USB-C Out: %.2f W • Standby: %.2f W", state.portOutWatts, state.peripheralsSleepWatts)
+                ),
                 icon: "bolt.fill",
                 accent: .orange
             )
@@ -280,20 +302,25 @@ public struct DashboardView: View {
                 mainValue: state.externalConnected
                     ? String(format: "%.2f W", state.adapterWatts)
                     : L.t("0.00 W", "0.00 W"),
-                badgeText: state.externalConnected ? "Max \(state.adapterMaxWatts)W" : L.t("Dùng Pin", "On Battery"),
+                badgeText: "Max \(state.macMaxSupportedWatts)W",
                 badgeColor: .green,
-                footerLine1: state.externalConnected
-                    ? String(format: "Battery Rail: %+.2f W", state.batteryNetWatts)
-                    : String(format: "Xả từ Pin: -%.2f W", abs(state.batteryNetWatts)),
-                footerLine2: L.t("Cảm biến AppleSMC (PDTR • 1.0s)", "AppleSMC Sensor (PDTR • 1.0s)"),
+                footerLine1: state.powerSupplyStatusText,
+                footerLine2: L.t(
+                    state.externalConnected
+                        ? "Máy hỗ trợ tối đa: \(state.macMaxSupportedWatts)W • Củ sạc đang cắm: \(state.adapterMaxWatts)W"
+                        : "Máy hỗ trợ sạc tối đa: \(state.macMaxSupportedWatts)W (\(state.macModelSummary))",
+                    state.externalConnected
+                        ? "Mac Max: \(state.macMaxSupportedWatts)W • Connected Brick: \(state.adapterMaxWatts)W"
+                        : "Mac Max Supported: \(state.macMaxSupportedWatts)W (\(state.macModelSummary))"
+                ),
                 icon: state.externalConnected ? "powerplug.fill" : "battery.75percent",
                 accent: .green
             )
 
             kpiCard(
                 title: state.sleepAnalysisMode == .bySession
-                    ? L.t("THEO LẦN SLEEP / CLOSELID", "BY SLEEP / CLOSELID SESSION")
-                    : L.t("THEO NGÀY TỪ 00:00 (CHƯA BẬT APP)", "BY DAY FROM 00:00 (UNPROTECTED)"),
+                    ? L.t("HAO PIN KHI SLEEP / CLOSELID", "SLEEP / CLOSELID DRAIN")
+                    : L.t("HAO PIN THEO NGÀY (TỪ 00:00)", "DAILY DRAIN (FROM 00:00)"),
                 mainValue: L.t("Mất -\(dropPct)% Pin", "Lost -\(dropPct)%"),
                 badgeText: "\(startBat)% → \(endBat)%",
                 badgeColor: .red,
@@ -302,15 +329,15 @@ public struct DashboardView: View {
                     String(format: "%.1fh sleep • %d DarkWakes", sleepHours, darkWakes)
                 ),
                 footerLine2: L.t(
-                    String(format: "Hao phí trung bình: %.2f W", avgW),
-                    String(format: "Avg sleep drain: %.2f W", avgW)
+                    String(format: "Công suất rò trung bình: %.2f W", avgW),
+                    String(format: "Average sleep drain: %.2f W", avgW)
                 ),
                 icon: "bed.double.fill",
                 accent: .red
             )
 
             kpiCard(
-                title: L.kpiWithMacNAP,
+                title: L.t("DỰ ĐOÁN KHI BẬT MACNAP", "WITH MACNAP GUARD"),
                 mainValue: L.t("Chỉ mất ~1% Pin", "Only ~1% Loss"),
                 badgeText: "\(startBat)% → ~\(wakeWithApp)%",
                 badgeColor: .cyan,
@@ -319,7 +346,7 @@ public struct DashboardView: View {
                     "Saves +\(savedPoints)% battery per night"
                 ),
                 footerLine2: L.t(
-                    "Khi bật Auto-Unmount & tắt DarkWake",
+                    "Khi bật Auto-Unmount & chặn DarkWake",
                     "With Auto-Unmount & DarkWake off"
                 ),
                 icon: "sparkles",
@@ -347,20 +374,21 @@ public struct DashboardView: View {
                     .background(accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 6))
 
                 Text(title)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 10.5, weight: .bold))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
 
-            Spacer(minLength: 10)
+            Spacer(minLength: 8)
 
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(mainValue)
-                    .font(.system(size: 23, weight: .bold, design: .rounded).monospacedDigit())
+                    .font(.system(size: 22, weight: .bold, design: .rounded).monospacedDigit())
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.65)
 
-                Spacer(minLength: 2)
+                Spacer(minLength: 4)
 
                 Text(badgeText)
                     .font(.system(size: 11, weight: .bold, design: .monospaced))
@@ -369,26 +397,29 @@ public struct DashboardView: View {
                     .background(badgeColor.opacity(0.16), in: Capsule())
                     .foregroundStyle(badgeColor)
                     .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
 
-            Spacer(minLength: 10)
+            Spacer(minLength: 8)
 
             Divider()
                 .padding(.bottom, 7)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(footerLine1)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.primary.opacity(0.85))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.primary.opacity(0.92))
                     .lineLimit(1)
+                    .minimumScaleFactor(0.72)
                 Text(footerLine2)
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
         }
         .padding(14)
-        .frame(maxWidth: .infinity, minHeight: 132, maxHeight: 132, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 142, maxHeight: 142, alignment: .leading)
         .background(
             ZStack {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -529,12 +560,14 @@ public struct DashboardView: View {
             HStack(spacing: 10) {
                 Label(
                     L.t(
-                        "Biểu đồ Phiên Ngủ Thực Tế kiểu Sleep Aid",
-                        "Sleep Aid Interactive Timeline"
+                        "Biểu đồ Phiên Ngủ Thực Tế kiểu Sleep Aid (Sleep / CloseLid)",
+                        "Sleep Aid Interactive Timeline (Sleep / CloseLid)"
                     ),
                     systemImage: "moon.stars.fill"
                 )
                 .font(.headline)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
 
                 Spacer()
 
@@ -543,8 +576,9 @@ public struct DashboardView: View {
                     Text(L.t("Theo lần Sleep / CloseLid", "By Sleep / CloseLid")).tag(SleepAnalysisMode.bySession)
                     Text(L.t("Theo Ngày (Từ 00:00)", "By Day (From 00:00)")).tag(SleepAnalysisMode.byDay)
                 }
+                .labelsHidden()
                 .pickerStyle(.segmented)
-                .frame(width: 290)
+                .frame(width: 270)
 
                 if !activeList.isEmpty {
                     Picker("", selection: $state.selectedSessionID) {
@@ -553,7 +587,8 @@ public struct DashboardView: View {
                                 .tag(Optional(session.id))
                         }
                     }
-                    .frame(width: 310)
+                    .labelsHidden()
+                    .frame(width: 265)
                 }
 
                 Button {
@@ -748,6 +783,117 @@ public struct DashboardView: View {
         }
     }
 
+    // MARK: - Peripherals Realtime KPI & Live Chart
+    private var peripheralsKpiRow: some View {
+        let L = state.l10n
+        let totalPeriphmA = state.peripherals.reduce(0) { $0 + $1.currentmA }
+        let savedW = max(0.0, state.peripheralsTotalWatts - state.peripheralsSleepWatts)
+        let pctOfSystem = Int(round((state.peripheralsTotalWatts / max(1.0, state.systemLoadWatts)) * 100.0))
+
+        return HStack(spacing: 14) {
+            kpiCard(
+                title: L.t("TỔNG TIÊU THỤ NGOẠI VI (REALTIME 1.0S)", "TOTAL PERIPHERALS POWER (LIVE 1.0S)"),
+                mainValue: String(format: "%.2f W", state.peripheralsTotalWatts),
+                badgeText: "● LIVE 1.0s",
+                badgeColor: .pink,
+                footerLine1: L.t(
+                    "Tổng dòng tải USB/TB: \(totalPeriphmA) mA (\(state.peripherals.count) thiết bị)",
+                    "Total USB/TB current: \(totalPeriphmA) mA (\(state.peripherals.count) devices)"
+                ),
+                footerLine2: L.t(
+                    String(format: "Cổng USB-C Out (Hardware): %.2f W • TB R/L: %.2f W", state.portOutWatts, state.tbLeftWatts + state.tbRightWatts),
+                    String(format: "USB-C Port Out: %.2f W • TB R/L: %.2f W", state.portOutWatts, state.tbLeftWatts + state.tbRightWatts)
+                ),
+                icon: "cable.connector.horizontal",
+                accent: .pink
+            )
+
+            kpiCard(
+                title: L.t("SAU KHI AUTO-UNMOUNT (STANDBY)", "AFTER AUTO-UNMOUNT (STANDBY)"),
+                mainValue: String(format: "%.2f W", state.peripheralsSleepWatts),
+                badgeText: String(format: "-%.2f W", savedW),
+                badgeColor: .green,
+                footerLine1: L.t(
+                    String(format: "Tiết kiệm ngay %.2f W khi Sleep / CloseLid", savedW),
+                    String(format: "Saves %.2f W immediately on Sleep / CloseLid", savedW)
+                ),
+                footerLine2: L.t(
+                    "Tự động ngắt phân vùng ổ ngoài, đưa NVMe/SSD về Standby",
+                    "Auto-unmounts external partitions into low-power Standby"
+                ),
+                icon: "leaf.fill",
+                accent: .green
+            )
+
+            kpiCard(
+                title: L.t("TỶ TRỌNG NGOẠI VI / SYSTEM TOTAL", "PERIPHERALS VS SYSTEM TOTAL"),
+                mainValue: "\(pctOfSystem)% System",
+                badgeText: String(format: "%.2fW / %.2fW", state.peripheralsTotalWatts, state.systemLoadWatts),
+                badgeColor: .cyan,
+                footerLine1: L.t(
+                    String(format: "Ngoại vi: %.2f W • Hệ thống Core: %.2f W", state.peripheralsTotalWatts, state.cpuCoreWatts),
+                    String(format: "Peripherals: %.2f W • Core System: %.2f W", state.peripheralsTotalWatts, state.cpuCoreWatts)
+                ),
+                footerLine2: state.powerSupplyStatusText,
+                icon: "gauge.with.dots.needle.67percent",
+                accent: .cyan
+            )
+        }
+    }
+
+    private var peripheralsRealtimeLineCard: some View {
+        let L = state.l10n
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label(
+                    L.t("Biểu đồ Công suất Ngoại vi Realtime (1.0s)", "Realtime Peripherals Power (1.0s)"),
+                    systemImage: "waveform.path.ecg"
+                )
+                .font(.headline)
+                Spacer()
+                Text("● LIVE 1.0s")
+                    .font(.caption2.bold())
+                    .foregroundStyle(.pink)
+            }
+
+            Chart {
+                ForEach(state.samples) { sample in
+                    AreaMark(
+                        x: .value("Time", sample.timestamp),
+                        y: .value("Peripherals (W)", sample.peripheralsWatts)
+                    )
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.pink.opacity(0.30), .pink.opacity(0.02)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+
+                    LineMark(
+                        x: .value("Time", sample.timestamp),
+                        y: .value("Peripherals (W)", sample.peripheralsWatts),
+                        series: .value("Type", "Peripherals")
+                    )
+                    .foregroundStyle(.pink)
+                    .lineStyle(StrokeStyle(lineWidth: 2.5))
+                }
+            }
+            .chartYAxisLabel("Watts (W)")
+            .frame(height: 205)
+
+            HStack(spacing: 16) {
+                legendDot(color: .pink, label: String(format: "Ngoại vi Realtime: %.2f W", state.peripheralsTotalWatts))
+                legendDot(color: .cyan, label: String(format: "USB-C Port Out: %.2f W", state.portOutWatts))
+                legendDot(color: .green, label: String(format: "Standby sau Unmount: %.2f W", state.peripheralsSleepWatts))
+            }
+            .font(.caption2)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
     // MARK: - Peripherals List
     private var peripheralsSection: some View {
         let L = state.l10n
@@ -755,13 +901,16 @@ public struct DashboardView: View {
             HStack {
                 Label(
                     L.t(
-                        "Danh sách thiết bị ngoại vi & Cổng Thunderbolt (Nhấn vào thiết bị để mở cửa sổ Chart & Log riêng)",
-                        "Connected Peripherals & Thunderbolt Ports (Click any device to open its Chart & Log window)"
+                        "Danh sách Thiết bị Ngoại vi & Công suất Tiêu thụ Realtime (Nhấn vào thiết bị để mở Chart & Log riêng)",
+                        "Connected Peripherals & Realtime Watt Telemetry (Click any device for dedicated Chart & Log)"
                     ),
                     systemImage: "externaldrive.connected.to.line.below.fill"
                 )
                 .font(.headline)
                 Spacer()
+                Text(L.t("● Đang đo Realtime 1.0s", "● Live 1.0s Telemetry"))
+                    .font(.caption.bold())
+                    .foregroundStyle(.green)
                 Button(L.t("Quét lại", "Rescan")) {
                     state.refreshAll(forcePartitionScan: true)
                 }
@@ -794,9 +943,15 @@ public struct DashboardView: View {
                                     .background((dev.isMounted ? Color.orange : Color.green).opacity(0.2), in: Capsule())
                                     .foregroundStyle(dev.isMounted ? .orange : .green)
                             }
+                            Text("● LIVE")
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1.5)
+                                .background(Color.green.opacity(0.16), in: Capsule())
+                                .foregroundStyle(.green)
                         }
-                        Text("Vendor: \(dev.vendor) • \(dev.speedDescription) • Active: \(dev.currentmA)mA (Standby: \(dev.sleepCurrentmA)mA) @ \(String(format: "%.1fV", dev.voltageV))")
-                            .font(.caption)
+                        Text("Vendor: \(dev.vendor) • \(dev.speedDescription) • Realtime: \(dev.currentmA) mA @ \(String(format: "%.2fV", dev.voltageV)) (Standby: \(dev.sleepCurrentmA) mA)")
+                            .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
 
@@ -804,10 +959,10 @@ public struct DashboardView: View {
 
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(String(format: "%.2f W", dev.watts))
-                            .font(.system(.body, design: .monospaced).bold())
-                            .foregroundStyle(dev.watts >= 2.0 ? .pink : .primary)
-                        Text(String(format: "Standby: %.2f W", dev.sleepWatts))
-                            .font(.caption2)
+                            .font(.system(size: 16, weight: .bold, design: .monospaced))
+                            .foregroundStyle(dev.watts >= 2.0 ? .pink : .cyan)
+                        Text(String(format: "%d mA • Standby: %.2f W", dev.currentmA, dev.sleepWatts))
+                            .font(.caption2.monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
 

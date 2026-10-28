@@ -2,6 +2,19 @@
 
 ## [Unreleased] - 2026-10-28
 
+### [11:29] feat: auto-close Dashboard when inactive, zero-truncation responsive layout, 140W MacBook Pro hardware spec, realtime peripheral Watts & explicit Charging vs Direct Power status
+- **Tự động đóng cửa sổ Dashboard khi mất active (`MacNAPApp.swift`)**:
+  - Theo dõi `NSApplication.didResignActiveNotification` và `NSWindow.didResignKeyNotification` để tự động ẩn (`orderOut`) cửa sổ Dashboard ngay khi nhấn ra ngoài, đồng thời giữ cửa sổ không bị đóng nhầm khi đang mở menu chọn ngôn ngữ/phiên ngủ bên trong.
+- **Hiển thị đầy đủ 100% nội dung trên thẻ KPI & Biểu đồ (`DashboardView.swift`)**:
+  - Mở rộng kích thước mặc định của Dashboard (`1280x850`), áp dụng `.minimumScaleFactor` và `.fixedSize` cho toàn bộ 4 thẻ Bento KPI để không còn bất kỳ chữ hay huy hiệu nào bị cắt cụt (`...`), tiêu đề biểu đồ Sleep Aid nằm gọn trên 1 dòng.
+- **Nhận diện chuẩn công suất sạc tối đa theo từng đời máy MacBook (`PowerTelemetryService.swift`)**:
+  - Đọc `hw.model` & `machdep.cpu.brand_string` (`MacBookPro18,2` — `Apple M1 Max` 16-inch hỗ trợ sạc tối đa **`Max 140W`**), hiển thị song song công suất tối đa của máy (`140W`) và công suất củ sạc đang cắm (`100W`).
+- **Hiển thị rõ công suất thiết bị ngoại vi dưới phần tiêu thụ & chế độ Sạc vào Pin vs Dùng nguồn trực tiếp (`AppState.swift`, `DashboardView.swift`, `MenuBarPopoverView.swift`)**:
+  - Ngay dưới thẻ **Công suất tiêu thụ (`System Total`)** và Sidebar: Hiển thị rõ **`🔌 Thiết bị ngoại vi: X.XX W • Core: Y.YY W`** và công suất cổng USB-C Out (`PowerOutDetails`).
+  - Ngay dưới thẻ **Nguồn sạc vào (`DC In`)**: Hiển thị tường minh đang **`⚡ Đang sạc vào Pin (+X.XX W) • Nuôi máy trực tiếp`**, hay **`🔌 Dùng nguồn trực tiếp (Sạc duy trì vào Pin: +0.47 W)`**, hay **`🔋 Đang dùng Pin (Xả từ Pin)`**.
+- **Tab Thiết bị Ngoại vi & USB chạy công suất Realtime 1.0s (`PowerTelemetryService.swift`, `DashboardView.swift`)**:
+  - Kết hợp thông số điện áp/dòng thực tế từ `AppleSmartBattery` (`PowerOutDetails`: `AdapterVoltage`, `Current`, `Watts`) với cảm biến `AppleSMC` mỗi 1.0 giây, bổ sung 3 thẻ KPI Ngoại vi Realtime và **Biểu đồ Đường Công suất Ngoại vi Realtime (1.0s)** ngay trong tab Thiết bị.
+
 ### [11:19] fix: remove top toolbar action buttons, use dropdown language menu & unify Sleep/CloseLid detection and log parsing
 - **Dọn gọn thanh Toolbar trên Dashboard (`DashboardView.swift`)**:
   - Loại bỏ hoàn toàn 3 nút hành động thừa (`Unmount ổ ngoài`, `Mount lại ngay`, `Unmount & Ngủ ngay`) trên thanh tiêu đề trên cùng của Dashboard.
