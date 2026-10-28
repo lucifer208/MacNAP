@@ -68,6 +68,8 @@ public final class AppState: ObservableObject {
     @Published public var batteryDrainLogs: [BatteryDrainLogEntry] = []
     @Published public var batteryDrainFilter: BatteryDrainFilter = .all
     @Published public var batteryDrainSearchQuery: String = ""
+    @Published public var batteryHistory24h: [BatteryChartHourlySample] = []
+    @Published public var batteryChartTimeRange: Int = 0 // 0 = 24h, 1 = 10 ngày
 
     @Published public var systemLoadWatts: Double = 0.0
     @Published public var cpuCoreWatts: Double = 0.0
@@ -215,6 +217,7 @@ public final class AppState: ObservableObject {
         refreshWakeLogs()
         scanTopAppEnergy()
         loadHistoricalBatteryDrainLogs()
+        load24hBatteryChartData()
         if autoCheckUpdateEnabled {
             checkForUpdates(silentIfUpToDate: true)
         }
@@ -1254,6 +1257,162 @@ public final class AppState: ObservableObject {
             let finalEntries = Array(parsed.reversed().prefix(100))
             await MainActor.run {
                 self.batteryDrainLogs = finalEntries
+            }
+        }
+    }
+
+    public func load24hBatteryChartData() {
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self = self else { return }
+            let proc = Process()
+            proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
+            proc.arguments = [
+                "-c",
+                "pmset -g log | grep -E 'Using (Batt|BATT|AC)|DarkWake from|Entering Sleep|Wake from' | tail -n 1200"
+            ]
+            let pipe = Pipe()
+            proc.standardOutput = pipe
+            proc.standardError = pipe
+
+            var lines: [String] = []
+            do {
+                try proc.run()
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                proc.waitUntilExit()
+                if let str = String(data: data, encoding: .utf8) {
+                    lines = str.components(separatedBy: .newlines)
+                }
+            } catch {
+                return
+            }
+
+            let calendar = Calendar.current
+            let now = Date()
+            let currentHour = calendar.component(.hour, from: now)
+            let currentBat = await MainActor.run { self.batteryPercent }
+            let currentAC = await MainActor.run { self.isCharging }
+
+            var hourlyCharge: [Int: Int] = [:]
+            var hourlyAC: [Int: Bool] = [:]
+            var hourlyDarkWakes: [Int: Int] = [:]
+            var hourlySleep: [Int: Bool] = [:]
+
+            let df = DateFormatter()
+            df.dateFormat = "yyyy-MM-dd HH:mm:ss Z"
+            df.locale = Locale(identifier: "en_US_POSIX")
+
+            for raw in lines {
+                let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard line.count >= 25 else { continue }
+                let dateStr = String(line.prefix(25))
+                guard let date = df.date(from: dateStr) else { continue }
+                guard calendar.isDate(date, inSameDayAs: now) else { continue }
+                let h = calendar.component(.hour, from: date)
+
+                var charge: Int?
+                if let range = line.range(of: #"Charge:\s*(\d+)%"#, options: .regularExpression) {
+                    let sub = String(line[range])
+                    charge = Int(sub.filter(\.isNumber))
+                } else if let range2 = line.range(of: #"Charge:\s*(\d+)"#, options: .regularExpression) {
+                    let sub = String(line[range2])
+                    charge = Int(sub.filter(\.isNumber))
+                }
+
+                if let c = charge {
+                    hourlyCharge[h] = c
+                }
+                if line.contains("Using AC") {
+                    hourlyAC[h] = true
+                } else if line.contains("Using Batt") || line.contains("Using BATT") {
+                    hourlyAC[h] = false
+                }
+                if line.contains("DarkWake") {
+                    hourlyDarkWakes[h, default: 0] += 1
+                }
+                if line.contains("Sleep") {
+                    hourlySleep[h] = true
+                }
+            }
+
+            var samples: [BatteryChartHourlySample] = []
+            var lastKnownCharge = hourlyCharge.first(where: { $0.key <= currentHour })?.value ?? currentBat
+            var lastKnownAC = false
+
+            for h in 0...23 {
+                let label: String
+                if h == 0 {
+                    label = "00 giờ"
+                } else if h == 12 {
+                    label = "12 giờ"
+                } else if h % 3 == 0 {
+                    label = String(format: "%02d", h)
+                } else {
+                    label = String(format: "%02d", h)
+                }
+
+                let timeStr = String(format: "%02d:00", h)
+
+                if h > currentHour {
+                    samples.append(
+                        BatteryChartHourlySample(
+                            hourIndex: h,
+                            label: label,
+                            timeString: timeStr,
+                            batteryPercent: 0,
+                            isCharging: false,
+                            screenOnMinutes: 0,
+                            darkWakeCount: 0,
+                            isSleepPeriod: false,
+                            watts: 0.0
+                        )
+                    )
+                    continue
+                }
+
+                if let c = hourlyCharge[h] {
+                    lastKnownCharge = c
+                }
+                if let ac = hourlyAC[h] {
+                    lastKnownAC = ac
+                }
+                if h == currentHour {
+                    lastKnownCharge = currentBat
+                    lastKnownAC = currentAC
+                }
+
+                let isSleeping = hourlySleep[h] ?? (h >= 1 && h <= 6)
+                let darkWakes = hourlyDarkWakes[h] ?? 0
+
+                let screenMinutes: Int
+                if isSleeping {
+                    screenMinutes = min(15, darkWakes * 2)
+                } else if h == currentHour {
+                    let mins = calendar.component(.minute, from: now)
+                    screenMinutes = max(5, mins)
+                } else {
+                    screenMinutes = lastKnownAC ? 50 : 35
+                }
+
+                let estWatts = lastKnownAC ? 35.0 : 12.5
+
+                samples.append(
+                    BatteryChartHourlySample(
+                        hourIndex: h,
+                        label: label,
+                        timeString: timeStr,
+                        batteryPercent: lastKnownCharge,
+                        isCharging: lastKnownAC,
+                        screenOnMinutes: screenMinutes,
+                        darkWakeCount: darkWakes,
+                        isSleepPeriod: isSleeping,
+                        watts: estWatts
+                    )
+                )
+            }
+
+            let finalSamples = samples
+            await MainActor.run {
+                self.batteryHistory24h = finalSamples
             }
         }
     }

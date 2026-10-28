@@ -380,12 +380,220 @@ public struct DashboardView: View {
     private var batteryDrainContent: some View {
         VStack(alignment: .leading, spacing: 18) {
             batteryDrainKpiRow
+            appleStyleBatteryChartSection
             HStack(alignment: .top, spacing: 16) {
                 topEnergyAppsSection
                     .frame(width: 330)
                 batteryDrainHistorySection
             }
         }
+    }
+
+    private var appleStyleBatteryChartSection: some View {
+        let L = state.l10n
+        let samples = state.batteryHistory24h
+
+        return VStack(alignment: .leading, spacing: 14) {
+            // 1. Time range picker & status summary
+            HStack(alignment: .center) {
+                Picker("", selection: $state.batteryChartTimeRange) {
+                    Text(L.t("24 giờ qua", "Last 24 Hours")).tag(0)
+                    Text(L.t("10 ngày qua", "Last 10 Days")).tag(1)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 250)
+
+                Spacer()
+
+                HStack(spacing: 8) {
+                    Image(systemName: state.isCharging ? "bolt.fill" : "battery.100")
+                        .foregroundStyle(state.isCharging ? .green : .cyan)
+                    Text(state.isCharging
+                         ? L.t("Đang sạc AC (\(Int(state.chargingIntoBatteryWatts))W) • Pin \(state.batteryPercent)%",
+                               "Charging AC (\(Int(state.chargingIntoBatteryWatts))W) • Bat \(state.batteryPercent)%")
+                         : L.t("Đang dùng Pin • Còn \(state.batteryPercent)%",
+                               "On Battery • \(state.batteryPercent)% remaining"))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Divider()
+
+            // 2. Mức pin (Battery Level Chart)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(L.t("Mức pin", "Battery Level"))
+                        .font(.system(size: 13, weight: .bold))
+                    Spacer()
+                    Text(L.t("Hiển thị 24 mốc thời gian trong ngày", "24-hour timeline progression"))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                Chart {
+                    ForEach(samples) { s in
+                        BarMark(
+                            x: .value("Giờ", s.timeString),
+                            y: .value("Mức pin (%)", s.batteryPercent),
+                            width: .fixed(7)
+                        )
+                        .foregroundStyle(
+                            s.batteryPercent == 0 ? Color.clear :
+                            (s.batteryPercent < 20 ? Color.orange : Color(red: 0.20, green: 0.85, blue: 0.40))
+                        )
+                        .cornerRadius(2)
+                    }
+
+                    RuleMark(y: .value("100%", 100))
+                        .lineStyle(StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+                        .foregroundStyle(Color.secondary.opacity(0.3))
+
+                    RuleMark(y: .value("50%", 50))
+                        .lineStyle(StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+                        .foregroundStyle(Color.secondary.opacity(0.3))
+                }
+                .chartYScale(domain: 0...100)
+                .chartYAxis {
+                    AxisMarks(values: [0, 50, 100]) { val in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+                            .foregroundStyle(Color.secondary.opacity(0.2))
+                        AxisValueLabel {
+                            if let intVal = val.as(Int.self) {
+                                Text("\(intVal)%")
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                .chartXAxis {
+                    AxisMarks(values: ["00:00", "03:00", "06:00", "09:00", "12:00", "15:00", "18:00", "21:00"]) { val in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 4]))
+                            .foregroundStyle(Color.secondary.opacity(0.15))
+                        AxisValueLabel {
+                            if let str = val.as(String.self) {
+                                let display = str == "00:00" ? L.t("00 giờ", "00:00") : (str == "12:00" ? L.t("12 giờ", "12:00") : String(str.prefix(2)))
+                                Text(display)
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                .frame(height: 110)
+
+                // Thanh trạng thái sạc (Charging track with lightning icons)
+                HStack(spacing: 0) {
+                    ForEach(samples) { s in
+                        ZStack {
+                            if s.isCharging {
+                                RoundedRectangle(cornerRadius: 1.5)
+                                    .fill(Color(red: 0.20, green: 0.85, blue: 0.40))
+                                    .frame(height: 3)
+                                if s.hourIndex % 4 == 0 {
+                                    Image(systemName: "bolt.fill")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .foregroundStyle(Color(red: 0.20, green: 0.85, blue: 0.40))
+                                }
+                            } else {
+                                Rectangle()
+                                    .fill(Color.clear)
+                                    .frame(height: 3)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+                .padding(.trailing, 45)
+            }
+
+            // 3. Sử dụng khi màn hình bật & Thức ngầm DarkWake
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(L.t("Sử dụng khi màn hình bật & Thức ngầm DarkWake", "Screen-On & DarkWake Activity"))
+                        .font(.system(size: 13, weight: .bold))
+                    Spacer()
+                    HStack(spacing: 12) {
+                        HStack(spacing: 4) {
+                            Circle().fill(Color(red: 0.18, green: 0.60, blue: 0.98)).frame(width: 7, height: 7)
+                            Text(L.t("Màn hình bật (phút)", "Screen-On (min)")).font(.caption2).foregroundStyle(.secondary)
+                        }
+                        HStack(spacing: 4) {
+                            Circle().fill(Color.orange).frame(width: 7, height: 7)
+                            Text(L.t("Thức ngầm DarkWake", "DarkWake Events")).font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                Chart {
+                    ForEach(samples) { s in
+                        BarMark(
+                            x: .value("Giờ", s.timeString),
+                            y: .value("Phút", s.screenOnMinutes),
+                            width: .fixed(7)
+                        )
+                        .foregroundStyle(Color(red: 0.18, green: 0.60, blue: 0.98))
+                        .cornerRadius(2)
+
+                        if s.darkWakeCount > 0 {
+                            PointMark(
+                                x: .value("Giờ", s.timeString),
+                                y: .value("DarkWake", min(60, s.darkWakeCount * 12))
+                            )
+                            .foregroundStyle(Color.orange)
+                            .symbolSize(32)
+                        }
+                    }
+
+                    RuleMark(y: .value("60ph", 60))
+                        .lineStyle(StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+                        .foregroundStyle(Color.secondary.opacity(0.3))
+
+                    RuleMark(y: .value("30ph", 30))
+                        .lineStyle(StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+                        .foregroundStyle(Color.secondary.opacity(0.3))
+                }
+                .chartYScale(domain: 0...60)
+                .chartYAxis {
+                    AxisMarks(values: [0, 30, 60]) { val in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+                            .foregroundStyle(Color.secondary.opacity(0.2))
+                        AxisValueLabel {
+                            if let intVal = val.as(Int.self) {
+                                Text("\(intVal)ph")
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                .chartXAxis {
+                    AxisMarks(values: ["00:00", "03:00", "06:00", "09:00", "12:00", "15:00", "18:00", "21:00"]) { val in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 4]))
+                            .foregroundStyle(Color.secondary.opacity(0.15))
+                        AxisValueLabel {
+                            if let str = val.as(String.self) {
+                                let display = str == "00:00" ? L.t("00 giờ", "00:00") : (str == "12:00" ? L.t("12 giờ", "12:00") : String(str.prefix(2)))
+                                Text(display)
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                .frame(height: 100)
+
+                HStack {
+                    Text(DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+            }
+        }
+        .padding(16)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var batteryDrainKpiRow: some View {

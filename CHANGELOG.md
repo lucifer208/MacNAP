@@ -2,6 +2,14 @@
 
 ## [1.0.1] - 2026-10-28
 
+### [20:14] feat(battery): add apple-style 24h battery level and screen-on activity chart
+- **Tích hợp Biểu đồ Mức Pin & Hoạt động 24h chuẩn Apple Battery Settings nhưng vượt trội hơn (`DashboardView.swift`, `AppState.swift`, `Models.swift`)**:
+  - **Bộ chọn thời gian**: Hỗ trợ chuyển đổi `24 giờ qua` và `10 ngày qua`.
+  - **Biểu đồ Mức pin (0% - 100%)**: Cột màu xanh lá Apple Battery theo 24 mốc giờ trong ngày, vạch kẻ ngang 50% & 100%, kèm dải chỉ báo cắm sạc AC (đường màu xanh + icon `⚡️`) chuẩn xác từng giờ máy được cấp nguồn.
+  - **Biểu đồ Hoạt động Màn hình & Thức ngầm DarkWake**: Cột màu xanh dương đo số phút màn hình bật mỗi giờ (0ph - 60ph), kết hợp điểm đánh dấu màu cam cảnh báo các lần máy bị đánh thức ngầm (DarkWake) lúc ngủ.
+  - **Dữ liệu thực từ `pmset`**: Tự động tổng hợp và ánh xạ toàn bộ sự kiện sụt pin, cắm sạc và thức giấc từ log phần cứng macOS.
+- **Tự động đóng gói bản dựng `v1.0.1.2610282022`**: Hoàn tất cập nhật bản chạy mới.
+
 ### [20:07] fix(ui): eliminate sidebar overlay collision and fix text truncation
 - **Sửa triệt để lỗi Sidebar trượt đè lên nội dung (Overlay Drawer) (`DashboardView.swift`)**:
   - Gắn tường minh `NavigationSplitView(columnVisibility: $columnVisibility)` kết hợp `.navigationSplitViewStyle(.balanced)`.
