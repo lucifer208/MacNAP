@@ -2,6 +2,13 @@
 
 ## [1.0.1] - 2026-10-28
 
+### [14:52] ci: add GitHub Actions automated release pipeline & create tag v1.0.1
+- **Tự động hóa phát hành bản mới (`.github/workflows/release.yml`)**:
+  - Tích hợp CI/CD tự động chạy trên macOS-14 (Apple Silicon).
+  - Tự động đóng gói `.dmg`, `.zip` và publish lên mục GitHub Releases khi push tag `v*`.
+- **Gắn nhãn phiên bản `v1.0.1`**:
+  - Tạo Git Tag `v1.0.1` sẵn sàng cho việc phát hành tự động.
+
 ### [14:38] fix(ui): remove duplicate Settings item from sidebar navigation list
 - **Loại bỏ mục trùng lặp `Cài đặt & Tùy chọn` trong Sidebar List (`AppState.swift`, `DashboardView.swift`, `Localization.swift`)**:
   - Gỡ `DashboardSection.settings` khỏi danh sách điều hướng bên trái để tránh dư thừa và làm chật sidebar.
