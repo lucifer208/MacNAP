@@ -168,13 +168,20 @@ public final class SleepMountGuardService {
         return entries
     }
 
-    /// Chạy chung 1 lần `pmset -g log` ở background để trích xuất đồng thờiทั้ง Sleep Sessions và Detailed Power Log Events (giảm 50% thời gian đọc log)
-    public func loadAllPmsetLogData(totalBatteryWh: Double, eventLimit: Int = 55) -> (sessions: [SleepSessionSummary], events: [WakeDrainEvent]) {
+    /// Chạy chung 1 lần `pmset -g log` ở background để trích xuất đồng thời:
+    /// 1) Các phiên ngủ theo lần gập nắp (`bySession`),
+    /// 2) Thống kê theo ngày từ 00:00 đến lúc mở máy (`byDay`),
+    /// 3) Danh sách sự kiện Power Log chi tiết.
+    public func loadAllPmsetLogData(totalBatteryWh: Double, eventLimit: Int = 55) -> (
+        sessions: [SleepSessionSummary],
+        dailySessions: [SleepSessionSummary],
+        events: [WakeDrainEvent]
+    ) {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
         proc.arguments = [
             "-c",
-            "pmset -g log | grep -E 'Entering Sleep|DarkWake|Wake from|DarkWake to FullWake|MaintenanceWake|Created Prevent|Released Prevent' | tail -n 450"
+            "pmset -g log | grep -E 'Entering Sleep|DarkWake|Wake from|DarkWake to FullWake|MaintenanceWake|Created Prevent|Released Prevent' | tail -n 1200"
         ]
         let pipe = Pipe()
         proc.standardOutput = pipe
@@ -188,7 +195,7 @@ public final class SleepMountGuardService {
             let output = String(data: data, encoding: .utf8) ?? ""
             rawLines = output.components(separatedBy: .newlines)
         } catch {
-            return ([], [])
+            return ([], [], [])
         }
 
         // 1. Parse Detailed WakeDrainEvents (lấy eventLimit dòng cuối)
@@ -314,9 +321,12 @@ public final class SleepMountGuardService {
         var current: [SleepTimelineEvent] = []
 
         for ev in parsedEvents {
+            // Bỏ qua các mốc đã cắm sạc AC liên tục khi gom phiên ngủ xả pin
+            if ev.usingAC && ev.kind != .fullWake { continue }
             if let last = current.last {
                 let gap = ev.timestamp.timeIntervalSince(last.timestamp)
-                if gap > 9000 || (last.kind == .fullWake && ev.kind == .sleep) {
+                // Gộp toàn bộ lần ngủ qua đêm thành 1 phiên liền mạch cho đến khi có FullWake hoặc ngắt > 4 tiếng
+                if gap > 14400 || (last.kind == .fullWake && ev.kind == .sleep) {
                     if current.count >= 2 {
                         sessions.append(current)
                     }
@@ -365,7 +375,61 @@ public final class SleepMountGuardService {
             )
         }
 
-        return (summaries.reversed(), events)
+        // 3. Nhóm theo Ngày (Từ 00:00 đến lúc mở máy / kết thúc ngủ trong ngày đó)
+        let dayKeyDF = DateFormatter()
+        dayKeyDF.dateFormat = "yyyy-MM-dd"
+        let displayDayDF = DateFormatter()
+        displayDayDF.dateFormat = "dd/MM"
+        let timeHM = DateFormatter()
+        timeHM.dateFormat = "HH:mm"
+
+        var eventsByDay: [String: [SleepTimelineEvent]] = [:]
+        for ev in parsedEvents {
+            if ev.usingAC && ev.kind != .fullWake { continue }
+            let key = dayKeyDF.string(from: ev.timestamp)
+            eventsByDay[key, default: []].append(ev)
+        }
+
+        var dailySummaries: [SleepSessionSummary] = []
+        for key in eventsByDay.keys.sorted() {
+            guard let dayEvents = eventsByDay[key], dayEvents.count >= 2,
+                  let first = dayEvents.first, let last = dayEvents.last else { continue }
+
+            let hours = max(0.1, last.timestamp.timeIntervalSince(first.timestamp) / 3600.0)
+            let startBat = first.batteryPercent
+            let endBat = last.batteryPercent
+            let drop = max(0, startBat - endBat)
+            let consumedWh = (Double(drop) / 100.0) * totalBatteryWh
+            let avgW = hours > 0.05 ? (consumedWh / hours) : 0.0
+
+            let darkWakes = dayEvents.filter { $0.kind == .darkWake }.count
+            let usbWakes = dayEvents.filter { $0.rawLine.localizedCaseInsensitiveContains("USB") || $0.rawLine.localizedCaseInsensitiveContains("ATC") }.count
+            let tcpActive = dayEvents.contains { $0.rawLine.contains("TCPKeepAlive=active") }
+
+            let dayStr = displayDayDF.string(from: first.timestamp)
+            let startHM = timeHM.string(from: first.timestamp)
+            let endHM = timeHM.string(from: last.timestamp)
+            let title = "Ngày \(dayStr) (00:00 / \(startHM) → \(endHM))"
+
+            dailySummaries.append(
+                SleepSessionSummary(
+                    startTime: first.timestamp,
+                    endTime: last.timestamp,
+                    titleLabel: title,
+                    startBattery: startBat,
+                    endBattery: endBat,
+                    dropPercent: drop,
+                    durationHours: hours,
+                    averageDrainWatts: avgW,
+                    darkWakeCount: darkWakes,
+                    usbWakeCount: usbWakes,
+                    tcpKeepAliveActive: tcpActive,
+                    events: dayEvents
+                )
+            )
+        }
+
+        return (summaries.reversed(), dailySummaries.reversed(), events)
     }
 
     public func scanSleepAssertions() -> [SleepAssertionItem] {

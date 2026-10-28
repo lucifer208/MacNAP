@@ -256,7 +256,9 @@ public struct DashboardView: View {
             )
 
             kpiCard(
-                title: L.kpiLastSleep,
+                title: state.sleepAnalysisMode == .bySession
+                    ? L.t("THEO LẦN SLEEP (CHƯA BẬT APP)", "BY SLEEP SESSION (UNPROTECTED)")
+                    : L.t("THEO NGÀY TỪ 00:00 (CHƯA BẬT APP)", "BY DAY FROM 00:00 (UNPROTECTED)"),
                 mainValue: L.t("Mất -\(dropPct)% Pin", "Lost -\(dropPct)%"),
                 badgeText: "\(startBat)% → \(endBat)%",
                 badgeColor: .red,
@@ -487,12 +489,13 @@ public struct DashboardView: View {
     // MARK: - Sleep Aid Interactive Timeline
     private var sleepAidTimelineSection: some View {
         let L = state.l10n
+        let activeList = state.activeSleepSessionList
         return VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            HStack(spacing: 10) {
                 Label(
                     L.t(
-                        "Biểu đồ Phiên Ngủ Thực Tế kiểu Sleep Aid (Nhấn vào vạch giờ để xem chi tiết)",
-                        "Sleep Aid Interactive Timeline (Click any event bar for details)"
+                        "Biểu đồ Phiên Ngủ Thực Tế kiểu Sleep Aid",
+                        "Sleep Aid Interactive Timeline"
                     ),
                     systemImage: "moon.stars.fill"
                 )
@@ -500,14 +503,22 @@ public struct DashboardView: View {
 
                 Spacer()
 
-                if !state.sleepSessions.isEmpty {
-                    Picker(L.t("Phiên ngủ:", "Session:"), selection: $state.selectedSessionID) {
-                        ForEach(state.sleepSessions) { session in
+                // Segmented Toggle: Theo lần Sleep vs Theo Ngày (Từ 00:00)
+                Picker("", selection: $state.sleepAnalysisMode) {
+                    Text(L.t("Theo lần Sleep", "By Sleep Session")).tag(SleepAnalysisMode.bySession)
+                    Text(L.t("Theo Ngày (Từ 00:00)", "By Day (From 00:00)")).tag(SleepAnalysisMode.byDay)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 260)
+
+                if !activeList.isEmpty {
+                    Picker("", selection: $state.selectedSessionID) {
+                        ForEach(activeList) { session in
                             Text("\(session.titleLabel) (-\(session.dropPercent)% • \(session.darkWakeCount) DarkWake)")
                                 .tag(Optional(session.id))
                         }
                     }
-                    .frame(width: 330)
+                    .frame(width: 310)
                 }
 
                 Button {
@@ -517,10 +528,10 @@ public struct DashboardView: View {
                         HStack(spacing: 4) {
                             ProgressView()
                                 .controlSize(.small)
-                            Text(L.t("Đang đọc log...", "Reading log..."))
+                            Text(L.t("Đang đọc...", "Loading..."))
                         }
                     } else {
-                        Text(L.t("Đọc lại pmset log", "Reload pmset log"))
+                        Text(L.t("Đọc lại log", "Reload log"))
                     }
                 }
                 .disabled(state.isLoadingPmsetLog)

@@ -49,7 +49,15 @@ public enum SleepEventKind: String, Codable, CaseIterable {
     case fullWake = "Wake"
 }
 
-/// Một phiên ngủ thực tế tổng hợp từ `pmset -g log` (Sleep Aid Session)
+/// Chế độ xem thống kê Pin khi ngủ: Theo từng lần Sleep (Session) hoặc Theo Ngày (Từ 00:00 đến lúc mở máy)
+public enum SleepAnalysisMode: String, CaseIterable, Identifiable {
+    case bySession = "Theo lần Sleep"
+    case byDay = "Theo ngày (Từ 00:00)"
+
+    public var id: String { rawValue }
+}
+
+/// Một phiên ngủ thực tế hoặc tổng hợp theo ngày từ `pmset -g log`
 public struct SleepSessionSummary: Identifiable, Hashable {
     public let id = UUID()
     public let startTime: Date

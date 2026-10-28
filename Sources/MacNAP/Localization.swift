@@ -53,3 +53,4 @@ public struct L10n {
     public var kpiLastSleep: String { t("PHIÊN NGỦ GẦN NHẤT (CHƯA BẬT APP)", "LAST SLEEP (UNPROTECTED)") }
     public var kpiWithMacNAP: String { t("ƯỚC TÍNH KHI BẬT MACNAP GUARD", "ESTIMATED WITH MACNAP GUARD") }
 }
+

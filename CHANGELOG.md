@@ -2,6 +2,12 @@
 
 ## [Unreleased] - 2026-10-28
 
+### [11:05] feat: add Sleep Analysis Mode switcher (By Sleep Session vs By Day from 00:00)
+- **Thêm bộ chuyển đổi chế độ xem phiên ngủ (`SleepAnalysisMode`: Theo lần Sleep vs Theo Ngày từ `00:00`)**:
+  - **Theo lần Sleep (`By Sleep Session`)**: Tính từ lúc gập nắp bắt đầu ngủ đến lúc mở máy (`FullWake`), gộp trọn vẹn cả đêm ngủ (`100% → 80%`, mất `-20%`).
+  - **Theo Ngày (`By Day • Từ 00:00`)**: Tự động gom toàn bộ quá trình ngủ từ `00:00` đêm đến lúc mở máy trong ngày đó (ví dụ `Ngày 28/10 (00:00 / 00:50 → 09:25)`: `100% → 80%`, mất `-20%`), cho phép chọn xem lại từng ngày trước đó.
+  - Có nút chuyển nhanh Segmented Picker ngay trên cả **Menu Bar Popover** và **Dashboard**.
+
 ### [11:01] feat: custom NSPopover Menu Bar UI, double-click Menu Bar to open Dashboard, VI/EN i18n & equal-height Bento KPI cards
 - **Thay thế Menu chuẩn của macOS bằng `NSPopover` Custom View (`MenuBarPopoverView.swift` & `StatusBarController.swift`)**:
   - Loại bỏ hoàn toàn hiện tượng các dòng chữ bị xám mờ (`disabled`) của `NSMenu` mặc định.

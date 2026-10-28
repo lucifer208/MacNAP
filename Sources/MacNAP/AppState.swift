@@ -31,8 +31,14 @@ public final class AppState: ObservableObject {
     @Published public var wakeEvents: [WakeDrainEvent] = []
     @Published public var actionHistory: [SleepGuardLogEntry] = []
 
-    /// Danh sách các phiên ngủ thật đọc từ `pmset -g log` (kiểu Sleep Aid)
+    /// Chế độ phân tích ngủ: Theo lần Sleep (`bySession`) hoặc Theo Ngày từ 00:00 (`byDay`)
+    @Published public var sleepAnalysisMode: SleepAnalysisMode = .bySession {
+        didSet {
+            syncSelectedSessionForCurrentMode()
+        }
+    }
     @Published public var sleepSessions: [SleepSessionSummary] = []
+    @Published public var dailySleepSessions: [SleepSessionSummary] = []
     @Published public var selectedSessionID: UUID?
     @Published public var selectedTimelineEvent: SleepTimelineEvent?
     @Published public var isLoadingPmsetLog: Bool = false
@@ -403,20 +409,37 @@ public final class AppState: ObservableObject {
             self.isLoadingPmsetLog = false
             self.wakeEvents = combined.events
             self.sleepSessions = combined.sessions
-            if self.selectedSessionID == nil || !combined.sessions.contains(where: { $0.id == self.selectedSessionID }) {
-                if let mostSignificant = combined.sessions.first(where: { $0.dropPercent >= 5 }) ?? combined.sessions.first {
-                    self.selectedSessionID = mostSignificant.id
-                    self.selectedTimelineEvent = mostSignificant.events.first(where: { $0.kind == .darkWake }) ?? mostSignificant.events.first
-                }
+            self.dailySleepSessions = combined.dailySessions
+            self.syncSelectedSessionForCurrentMode()
+        }
+    }
+
+    public var activeSleepSessionList: [SleepSessionSummary] {
+        sleepAnalysisMode == .bySession ? sleepSessions : dailySleepSessions
+    }
+
+    private func syncSelectedSessionForCurrentMode() {
+        let list = activeSleepSessionList
+        if selectedSessionID == nil || !list.contains(where: { $0.id == selectedSessionID }) {
+            // Ưu tiên chọn phiên có mức sụt pin đáng kể nhất (ví dụ -20%) hoặc phiên đầu tiên
+            if let mostSignificant = list.max(by: { $0.dropPercent < $1.dropPercent }), mostSignificant.dropPercent > 0 {
+                selectedSessionID = mostSignificant.id
+                selectedTimelineEvent = mostSignificant.events.first(where: { $0.kind == .darkWake }) ?? mostSignificant.events.first
+            } else if let first = list.first {
+                selectedSessionID = first.id
+                selectedTimelineEvent = first.events.first
             }
+        } else if let current = currentSleepSession {
+            selectedTimelineEvent = current.events.first(where: { $0.kind == .darkWake }) ?? current.events.first
         }
     }
 
     public var currentSleepSession: SleepSessionSummary? {
-        if let id = selectedSessionID, let found = sleepSessions.first(where: { $0.id == id }) {
+        let list = activeSleepSessionList
+        if let id = selectedSessionID, let found = list.first(where: { $0.id == id }) {
             return found
         }
-        return sleepSessions.first
+        return list.first
     }
 
     public func filteredWakeEvents() -> [WakeDrainEvent] {

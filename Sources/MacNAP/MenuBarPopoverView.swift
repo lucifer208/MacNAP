@@ -93,7 +93,14 @@ public struct MenuBarPopoverView: View {
                 )
             }
 
-            // Clear Overnight Comparison Pill
+            // 2.5 Sleep Mode Switcher + Clear Overnight Comparison Pill
+            Picker("", selection: $state.sleepAnalysisMode) {
+                Text(L.t("Theo lần Sleep", "By Sleep Session")).tag(SleepAnalysisMode.bySession)
+                Text(L.t("Theo Ngày (Từ 00:00)", "By Day (From 00:00)")).tag(SleepAnalysisMode.byDay)
+            }
+            .pickerStyle(.segmented)
+            .controlSize(.small)
+
             if let s = state.currentSleepSession {
                 HStack(spacing: 8) {
                     Image(systemName: "sparkles")
@@ -101,19 +108,21 @@ public struct MenuBarPopoverView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(
                             L.t(
-                                "Ngủ \(String(format: "%.1fh", s.durationHours)): Chưa bật mất -\(s.dropPercent)% • Bật App chỉ mất ~ -1%",
-                                "\(String(format: "%.1fh", s.durationHours)) Sleep: Unprotected -\(s.dropPercent)% • With App ~ -1%"
+                                "\(s.titleLabel): Mất -\(s.dropPercent)% (\(s.startBattery)%→\(s.endBattery)%)",
+                                "\(s.titleLabel): Lost -\(s.dropPercent)% (\(s.startBattery)%→\(s.endBattery)%)"
                             )
                         )
                         .font(.system(size: 11, weight: .semibold))
+                        .lineLimit(1)
                         Text(
                             L.t(
-                                "Sáng dậy còn ~\(state.predictedWakeBatteryPercent)% pin (Giữ thêm +\(state.predictedSavedPercentPoints)% pin)",
-                                "Wake up with ~\(state.predictedWakeBatteryPercent)% (Saves +\(state.predictedSavedPercentPoints)% battery)"
+                                "Bật MacNAP chỉ mất ~1% (Còn ~\(state.predictedWakeBatteryPercent)%, giữ lại +\(state.predictedSavedPercentPoints)% pin)",
+                                "With MacNAP only ~1% loss (~\(state.predictedWakeBatteryPercent)% left, saves +\(state.predictedSavedPercentPoints)%)"
                             )
                         )
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                     }
                     Spacer()
                 }
@@ -256,3 +265,4 @@ public struct MenuBarPopoverView: View {
         }
     }
 }
+
