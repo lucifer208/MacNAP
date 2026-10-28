@@ -53,16 +53,6 @@ public struct DashboardView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button {
-                    state.toggleLanguage()
-                } label: {
-                    Text(state.language.code)
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.primary.opacity(0.1), in: Capsule())
-                }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
@@ -212,39 +202,19 @@ public struct DashboardView: View {
 
             Spacer()
 
-            Picker("", selection: $state.language) {
-                ForEach(AppLanguage.allCases) { lang in
-                    Text(lang.rawValue).tag(lang)
+            HStack(spacing: 6) {
+                Image(systemName: "globe")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Picker("", selection: $state.language) {
+                    ForEach(AppLanguage.allCases) { lang in
+                        Text(lang.rawValue).tag(lang)
+                    }
                 }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: 125)
             }
-            .pickerStyle(.segmented)
-            .frame(width: 170)
-
-            Button {
-                state.unmountAllNow()
-            } label: {
-                Label(L.unmountAll, systemImage: "arrow.down.doc.fill")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
-
-            Button {
-                state.remountAllNow()
-            } label: {
-                Label(L.remountAll, systemImage: "arrow.up.doc.fill")
-            }
-            .buttonStyle(.bordered)
-            .tint(.green)
-            .controlSize(.regular)
-
-            Button {
-                state.unmountAndSleepMacNow()
-            } label: {
-                Label(L.sleepNowZzz, systemImage: "moon.zzz.fill")
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.indigo)
-            .controlSize(.regular)
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 12)
@@ -322,7 +292,7 @@ public struct DashboardView: View {
 
             kpiCard(
                 title: state.sleepAnalysisMode == .bySession
-                    ? L.t("THEO LẦN SLEEP (CHƯA BẬT APP)", "BY SLEEP SESSION (UNPROTECTED)")
+                    ? L.t("THEO LẦN SLEEP / CLOSELID", "BY SLEEP / CLOSELID SESSION")
                     : L.t("THEO NGÀY TỪ 00:00 (CHƯA BẬT APP)", "BY DAY FROM 00:00 (UNPROTECTED)"),
                 mainValue: L.t("Mất -\(dropPct)% Pin", "Lost -\(dropPct)%"),
                 badgeText: "\(startBat)% → \(endBat)%",
@@ -568,13 +538,13 @@ public struct DashboardView: View {
 
                 Spacer()
 
-                // Segmented Toggle: Theo lần Sleep vs Theo Ngày (Từ 00:00)
+                // Segmented Toggle: Theo lần Sleep / CloseLid vs Theo Ngày (Từ 00:00)
                 Picker("", selection: $state.sleepAnalysisMode) {
-                    Text(L.t("Theo lần Sleep", "By Sleep Session")).tag(SleepAnalysisMode.bySession)
+                    Text(L.t("Theo lần Sleep / CloseLid", "By Sleep / CloseLid")).tag(SleepAnalysisMode.bySession)
                     Text(L.t("Theo Ngày (Từ 00:00)", "By Day (From 00:00)")).tag(SleepAnalysisMode.byDay)
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 260)
+                .frame(width: 290)
 
                 if !activeList.isEmpty {
                     Picker("", selection: $state.selectedSessionID) {

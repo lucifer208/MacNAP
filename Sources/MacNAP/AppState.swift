@@ -110,6 +110,8 @@ public final class AppState: ObservableObject {
     private var timer: Timer?
     private var tickCount: Int = 0
     private var isRefreshingTelemetry: Bool = false
+    private var wasLidClosedOrSleeping: Bool = false
+    private var lastSleepWakeHandledAt: Date = .distantPast
 
     public init() {
         applyDockVisibilityPolicy()
@@ -208,25 +210,7 @@ public final class AppState: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                guard let self = self, self.autoUnmountOnSleep else { return }
-                let service = self.guardService
-                let logs = await Task.detached(priority: .userInitiated) {
-                    service.unmountAllForSleep()
-                }.value
-                self.actionHistory.insert(contentsOf: logs, at: 0)
-                for dev in self.peripherals where dev.canUnmount {
-                    self.appendDeviceLog(
-                        deviceID: dev.id,
-                        event: "Sleep Auto-Unmount",
-                        watts: dev.sleepWatts,
-                        currentmA: dev.sleepCurrentmA,
-                        detail: "Gập nắp/Sleep: Đã unmount phân vùng \(dev.bsdName ?? ""), hạ dòng về Standby."
-                    )
-                }
-                if let first = logs.first {
-                    self.lastActionLog = "[Gập nắp • Auto-Unmount] \(first.target): \(first.detail)"
-                }
-                self.refreshAll(forcePartitionScan: true)
+                self?.handleUnifiedSleepCloseLid(trigger: "Sleep / CloseLid")
             }
         }
 
@@ -236,29 +220,68 @@ public final class AppState: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                guard let self = self else { return }
-                if self.autoRemountOnWake {
-                    let service = self.guardService
-                    let logs = await Task.detached(priority: .userInitiated) {
-                        service.remountAllOnWake(mountAllExternalIfEmpty: true)
-                    }.value
-                    self.actionHistory.insert(contentsOf: logs, at: 0)
-                    for dev in self.peripherals where dev.canUnmount {
-                        self.appendDeviceLog(
-                            deviceID: dev.id,
-                            event: "Wake Auto-Remount",
-                            watts: dev.watts,
-                            currentmA: dev.currentmA,
-                            detail: "Mở nắp/Wake: Đã tự động mount lại phân vùng \(dev.bsdName ?? "") tức thì."
-                        )
-                    }
-                    if let first = logs.first {
-                        self.lastActionLog = "[Mở nắp • Auto-Remount] \(first.target): \(first.detail)"
-                    }
-                }
-                self.refreshAll(forcePartitionScan: true)
-                self.refreshWakeLogs()
+                self?.handleUnifiedWakeOpenLid(trigger: "Wake / OpenLid")
             }
+        }
+    }
+
+    private func handleUnifiedSleepCloseLid(trigger: String) {
+        let now = Date()
+        guard now.timeIntervalSince(lastSleepWakeHandledAt) > 2.0 else { return }
+        lastSleepWakeHandledAt = now
+        wasLidClosedOrSleeping = true
+
+        guard autoUnmountOnSleep else { return }
+        let service = guardService
+        Task {
+            let logs = await Task.detached(priority: .userInitiated) {
+                service.unmountAllForSleep()
+            }.value
+            self.actionHistory.insert(contentsOf: logs, at: 0)
+            for dev in self.peripherals where dev.canUnmount {
+                self.appendDeviceLog(
+                    deviceID: dev.id,
+                    event: "Sleep / CloseLid Auto-Unmount",
+                    watts: dev.sleepWatts,
+                    currentmA: dev.sleepCurrentmA,
+                    detail: "\(trigger): Đã unmount phân vùng \(dev.bsdName ?? ""), hạ dòng về Standby."
+                )
+            }
+            if let first = logs.first {
+                self.lastActionLog = "[\(trigger) • Auto-Unmount] \(first.target): \(first.detail)"
+            }
+            self.refreshAll(forcePartitionScan: true)
+        }
+    }
+
+    private func handleUnifiedWakeOpenLid(trigger: String) {
+        let now = Date()
+        guard now.timeIntervalSince(lastSleepWakeHandledAt) > 2.0 else { return }
+        lastSleepWakeHandledAt = now
+        wasLidClosedOrSleeping = false
+
+        Task {
+            if self.autoRemountOnWake {
+                let service = self.guardService
+                let logs = await Task.detached(priority: .userInitiated) {
+                    service.remountAllOnWake(mountAllExternalIfEmpty: true)
+                }.value
+                self.actionHistory.insert(contentsOf: logs, at: 0)
+                for dev in self.peripherals where dev.canUnmount {
+                    self.appendDeviceLog(
+                        deviceID: dev.id,
+                        event: "Wake / OpenLid Auto-Remount",
+                        watts: dev.watts,
+                        currentmA: dev.currentmA,
+                        detail: "\(trigger): Đã tự động mount lại phân vùng \(dev.bsdName ?? "") tức thì."
+                    )
+                }
+                if let first = logs.first {
+                    self.lastActionLog = "[\(trigger) • Auto-Remount] \(first.target): \(first.detail)"
+                }
+            }
+            self.refreshAll(forcePartitionScan: true)
+            self.refreshWakeLogs()
         }
     }
 
@@ -295,14 +318,22 @@ public final class AppState: ObservableObject {
         Task {
             let result = await Task.detached(priority: .utility) {
                 let p = telemetryRef.readBatteryAndSystemPower()
+                let lidClosed = telemetryRef.isClamshellClosed()
                 let parts = shouldScanDisksAndAssertions ? guardRef.scanExternalPartitions() : cachedParts
                 let scannedPeripherals = telemetryRef.scanPeripherals(partitions: parts)
                 let newAssertions = shouldScanDisksAndAssertions ? guardRef.scanSleepAssertions() : cachedAssertions
-                return (p, parts, scannedPeripherals, newAssertions)
+                return (p, lidClosed, parts, scannedPeripherals, newAssertions)
             }.value
 
-            let (p, parts, scannedPeripherals, newAssertions) = result
+            let (p, lidClosed, parts, scannedPeripherals, newAssertions) = result
             self.isRefreshingTelemetry = false
+
+            // Đồng bộ chuẩn Sleep/CloseLid & Wake/OpenLid qua cả IOKit Clamshell lẫn NSWorkspace
+            if lidClosed && !self.wasLidClosedOrSleeping {
+                self.handleUnifiedSleepCloseLid(trigger: "CloseLid / Sleep")
+            } else if !lidClosed && self.wasLidClosedOrSleeping {
+                self.handleUnifiedWakeOpenLid(trigger: "OpenLid / Wake")
+            }
 
             let periphW = scannedPeripherals.reduce(0.0) { $0 + $1.watts }
             let periphSleepW = scannedPeripherals.reduce(0.0) { $0 + $1.sleepWatts }

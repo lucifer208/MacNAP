@@ -31,17 +31,16 @@ public struct MenuBarPopoverView: View {
                 }
                 Spacer()
 
-                // Language quick switch pill (VI / EN)
-                Button {
-                    state.toggleLanguage()
-                } label: {
-                    Text(state.language.code)
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(Color.primary.opacity(0.08), in: Capsule())
+                // Language dropdown menu (Tiếng Việt / English)
+                Picker("", selection: $state.language) {
+                    ForEach(AppLanguage.allCases) { lang in
+                        Text(lang.rawValue).tag(lang)
+                    }
                 }
-                .buttonStyle(.plain)
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .controlSize(.small)
+                .frame(width: 98)
 
                 Text("\(state.batteryPercent)%")
                     .font(.system(size: 12, weight: .bold, design: .monospaced))
@@ -95,7 +94,7 @@ public struct MenuBarPopoverView: View {
 
             // 2.5 Sleep Mode Switcher + Clear Overnight Comparison Pill
             Picker("", selection: $state.sleepAnalysisMode) {
-                Text(L.t("Theo lần Sleep", "By Sleep Session")).tag(SleepAnalysisMode.bySession)
+                Text(L.t("Theo lần Sleep / CloseLid", "By Sleep / CloseLid")).tag(SleepAnalysisMode.bySession)
                 Text(L.t("Theo Ngày (Từ 00:00)", "By Day (From 00:00)")).tag(SleepAnalysisMode.byDay)
             }
             .pickerStyle(.segmented)

@@ -4,6 +4,23 @@ import IOKit
 public final class PowerTelemetryService {
     public init() {}
 
+    /// Kiểm tra trạng thái gập nắp vật lý (`AppleClamshellState`) từ `IOPMrootDomain`
+    /// Giúp đồng bộ tuyệt đối `CloseLid` và `Sleep` ngay lập tức kể cả khi macOS chưa vào Deep Sleep.
+    public func isClamshellClosed() -> Bool {
+        let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPMrootDomain"))
+        guard service != 0 else { return false }
+        defer { IOObjectRelease(service) }
+        if let cfProp = IORegistryEntryCreateCFProperty(
+            service,
+            "AppleClamshellState" as CFString,
+            kCFAllocatorDefault,
+            0
+        )?.takeRetainedValue() as? Bool {
+            return cfProp
+        }
+        return false
+    }
+
     public func readBatteryAndSystemPower() -> (
         systemTotalW: Double,
         dcInW: Double,

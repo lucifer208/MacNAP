@@ -28,7 +28,7 @@ public struct L10n {
     public func sectionTitle(_ section: DashboardSection) -> String {
         switch section {
         case .overview: return t("Dashboard Tổng quan", "Overview Dashboard")
-        case .sleepAid: return t("Phân tích Ngủ (Sleep Aid)", "Sleep Aid Timeline")
+        case .sleepAid: return t("Phân tích Sleep / CloseLid", "Sleep / CloseLid Timeline")
         case .peripherals: return t("Thiết bị Ngoại vi & USB", "Peripherals & USB")
         case .powerLog: return t("Nhật ký Nguồn (pmset)", "Power Logs & Assertions")
         }
@@ -38,24 +38,23 @@ public struct L10n {
     public var openDashboard: String { t("Mở Dashboard Phân tích", "Open Analytics Dashboard") }
     public var unmountAll: String { t("Unmount ổ ngoài", "Unmount Drives") }
     public var remountAll: String { t("Mount lại ngay", "Remount Drives") }
-    public var sleepNowZzz: String { t("Unmount & Ngủ ngay", "Unmount & Sleep Now") }
+    public var sleepNowZzz: String { t("Unmount & Sleep ngay", "Unmount & Sleep Now") }
     public var quitApp: String { t("Thoát MacNAP", "Quit MacNAP") }
 
-    // Toggles
+    // Toggles (Sleep/CloseLid and Wake/OpenLid always unified)
     public var launchAtLogin: String { t("Khởi động cùng macOS", "Launch at Login") }
     public var hideDockIcon: String { t("Ẩn icon trên thanh Dock", "Hide Dock Icon") }
-    public var autoUnmountSleep: String { t("Tự Unmount khi gập nắp", "Auto-Unmount on Sleep") }
-    public var autoRemountWake: String { t("Tự Mount khi mở nắp", "Auto-Remount on Wake") }
-    public var disableDarkWakeBattery: String { t("Chặn DarkWake (Pin)", "Block DarkWake (Batt)") }
+    public var autoUnmountSleep: String { t("Tự Unmount khi Sleep / CloseLid", "Auto-Unmount on Sleep / CloseLid") }
+    public var autoRemountWake: String { t("Tự Mount khi Wake / OpenLid", "Auto-Remount on Wake / OpenLid") }
+    public var disableDarkWakeBattery: String { t("Chặn DarkWake (Khi dùng Pin)", "Block DarkWake (On Battery)") }
 
     // Group Titles
-    public var groupSleepGuard: String { t("BẢO VỆ NGỦ & Ổ NGOÀI", "SLEEP & DRIVE GUARD") }
+    public var groupSleepGuard: String { t("BẢO VỆ SLEEP / CLOSELID & Ổ NGOÀI", "SLEEP / CLOSELID & DRIVE GUARD") }
     public var groupSystemPrefs: String { t("HỆ THỐNG & GIAO DIỆN", "SYSTEM & INTERFACE") }
 
     // KPI Titles
     public var kpiSystemTotal: String { t("CÔNG SUẤT TIÊU THỤ (SYSTEM TOTAL)", "SYSTEM TOTAL POWER") }
     public var kpiDCIn: String { t("NGUỒN SẠC VÀO (DC IN)", "DC IN ADAPTER POWER") }
-    public var kpiLastSleep: String { t("PHIÊN NGỦ GẦN NHẤT (CHƯA BẬT APP)", "LAST SLEEP (UNPROTECTED)") }
+    public var kpiLastSleep: String { t("PHIÊN SLEEP / CLOSELID (CHƯA BẬT APP)", "SLEEP / CLOSELID (UNPROTECTED)") }
     public var kpiWithMacNAP: String { t("ƯỚC TÍNH KHI BẬT MACNAP GUARD", "ESTIMATED WITH MACNAP GUARD") }
 }
-

@@ -2,6 +2,14 @@
 
 ## [Unreleased] - 2026-10-28
 
+### [11:19] fix: remove top toolbar action buttons, use dropdown language menu & unify Sleep/CloseLid detection and log parsing
+- **Dọn gọn thanh Toolbar trên Dashboard (`DashboardView.swift`)**:
+  - Loại bỏ hoàn toàn 3 nút hành động thừa (`Unmount ổ ngoài`, `Mount lại ngay`, `Unmount & Ngủ ngay`) trên thanh tiêu đề trên cùng của Dashboard.
+  - Đổi bộ chọn ngôn ngữ (`Tiếng Việt / English`) sang dạng **Menu xổ xuống (`Picker` với `.pickerStyle(.menu)`)** trên cả Dashboard và Menu Bar Popover.
+- **Đồng bộ tuyệt đối `Sleep / CloseLid` và `Wake / OpenLid` (`PowerTelemetryService.swift`, `AppState.swift`, `SleepMountGuardService.swift`)**:
+  - Đọc trực tiếp trạng thái gập nắp phần cứng `AppleClamshellState` từ `IOPMrootDomain` (IOKit) kết hợp với `NSWorkspace.willSleepNotification` / `didWakeNotification` để `Sleep` và `CloseLid` luôn đi cùng nhau làm một (và `Wake` / `OpenLid` đi cùng nhau).
+  - Loại bỏ dòng rác `MaintenanceWake "com.apple.obc"` khỏi luồng trích xuất phiên ngủ `pmset -g log`, giúp giữ nguyên vẹn 100% phiên `Clamshell Sleep` (`CloseLid / Sleep`) từ lúc gập nắp (`27/10 22:51` • `100%`) đến lúc mở nắp (`28/10 09:25` • `80%`, mất `-20%`) thay vì bị cắt ngang.
+
 ### [11:11] feat: align all toggle switches right, group settings into clusters & add direct DarkWake blocker toggle
 - **Căn thẳng hàng tuyệt đối toàn bộ công tắc (`Toggle`) & icon thông số ở Sidebar và Menu Bar Popover**:
   - Sửa lỗi `Toggle("Label")` mặc định của SwiftUI làm lệch vị trí nút gạt theo độ dài chữ: Tách thành `HStack { Text(title); Spacer(); Toggle("", isOn: ...).labelsHidden() }` để tất cả các công tắc thẳng tắp một cột bên phải, icon thông số cố định `frame(width: 16)`.

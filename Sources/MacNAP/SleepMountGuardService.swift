@@ -181,7 +181,7 @@ public final class SleepMountGuardService {
         proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
         proc.arguments = [
             "-c",
-            "pmset -g log | grep -E 'Entering Sleep|DarkWake|Wake from|DarkWake to FullWake|MaintenanceWake|Created Prevent|Released Prevent' | tail -n 1200"
+            "pmset -g log | grep -E 'Entering Sleep|DarkWake from|DarkWake to FullWake|Wake from|PreventUserIdleSystemSleep' | tail -n 2500"
         ]
         let pipe = Pipe()
         proc.standardOutput = pipe
