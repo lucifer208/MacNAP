@@ -24,7 +24,7 @@ struct MacNAPApp: App {
         MenuBarExtra {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
-                    SleepingMacIconView(size: 24)
+                    Image(systemName: "laptopcomputer")
                     Text("MacNAP Zzz Guard")
                         .font(.headline)
                     Spacer()
@@ -34,15 +34,11 @@ struct MacNAPApp: App {
 
                 Divider()
 
-                Text(String(format: "⚡️ Tiêu thụ thực (Out): %.2f W", state.systemLoadWatts))
-                Text(
-                    state.externalConnected
-                        ? String(format: "🔌 Đang sạc vào Pin (In): +%.2f W (PD cấp %.1fW)", state.chargingIntoBatteryWatts, state.adapterWatts)
-                        : String(format: "🔋 Đang xả từ Pin: -%.2f W", abs(state.batteryNetWatts))
-                )
-                Text(String(format: "🖨️ Ngoại vi (Active): %.2f W (Standby: %.2f W)", state.peripheralsTotalWatts, state.peripheralsSleepWatts))
+                Text(String(format: "System Total (Tiêu thụ): %.2f W", state.systemLoadWatts))
+                Text(String(format: "DC In (Nguồn sạc vào): %.2f W", state.externalConnected ? state.adapterWatts : 0.0))
+                Text(String(format: "Ngoại vi (Active): %.2f W (Standby: %.2f W)", state.peripheralsTotalWatts, state.peripheralsSleepWatts))
                 if let s = state.currentSleepSession {
-                    Text(String(format: "🌙 Đêm qua: -%d%% • Dự đoán dùng App: -%.1f%% → -%.1f%%", s.dropPercent, state.predictedDropPercentWithFullGuard, state.predictedDropPercentWithAutoUnmount))
+                    Text(String(format: "Đêm qua: -%d%% • Dự đoán dùng App: -%.1f%% → -%.1f%%", s.dropPercent, state.predictedDropPercentWithFullGuard, state.predictedDropPercentWithAutoUnmount))
                 }
 
                 Divider()
@@ -96,14 +92,12 @@ struct MacNAPApp: App {
             }
             .padding(10)
         } label: {
-            Text(
-                String(
-                    format: "⚡️%.1fW 🔌%.1fW",
-                    state.systemLoadWatts,
-                    state.externalConnected ? state.chargingIntoBatteryWatts : 0.0
+            Image(
+                nsImage: SleepingMacIconView.renderMenuBarStatusImage(
+                    systemTotalW: state.systemLoadWatts,
+                    dcInW: state.externalConnected ? state.adapterWatts : 0.0
                 )
             )
-            .font(.system(size: 12, weight: .semibold, design: .monospaced))
         }
     }
 }

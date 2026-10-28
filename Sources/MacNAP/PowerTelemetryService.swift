@@ -5,9 +5,9 @@ public final class PowerTelemetryService {
     public init() {}
 
     public func readBatteryAndSystemPower() -> (
-        systemLoadW: Double,
+        systemTotalW: Double,
+        dcInW: Double,
         batteryNetW: Double,
-        adapterInW: Double,
         adapterMaxWatts: Int,
         voltageV: Double,
         amperagemA: Int,
@@ -48,25 +48,30 @@ public final class PowerTelemetryService {
             adapterMaxWatts = (adapterDetails["Watts"] as? Int) ?? 0
         }
 
-        // Dòng nạp/xả thực tế vào viên pin: dương (+W) = đang nạp vào pin, âm (-W) = đang xả pin, 0W = giữ pin (Bypass)
         var batteryNetW = (Double(amperage) * voltageV) / 1000.0
-        var systemLoadW = 0.0
-        var adapterInW = 0.0
+        var systemTotalW = 0.0
+        var dcInW = 0.0
 
         if let telemetry = props["PowerTelemetryData"] as? [String: Any] {
-            // SystemEnergyConsumed (mW) là công suất tiêu thụ thực của máy (tương đương iStat Menus / Stats ~ 6-12W)
+            // SystemTotal = SystemEnergyConsumed (mW) hoặc SystemLoad (mW)
             let energyConsumedMW = (telemetry["SystemEnergyConsumed"] as? Int) ?? 0
             let sysLoadMW = (telemetry["SystemLoad"] as? Int) ?? 0
+
+            // DC In = SystemVoltageIn (mV) * SystemCurrentIn (mA) / 1e6 hoặc SystemPowerIn (mW)
+            let vInMV = (telemetry["SystemVoltageIn"] as? Int) ?? 0
+            let iInMA = (telemetry["SystemCurrentIn"] as? Int) ?? 0
             let sysPowerInMW = (telemetry["SystemPowerIn"] as? Int) ?? 0
 
-            if energyConsumedMW > 0 {
-                systemLoadW = Double(energyConsumedMW) / 1000.0
-            } else if sysLoadMW > 0 {
-                systemLoadW = Double(sysLoadMW) / 1000.0
+            if vInMV > 0 && iInMA > 0 {
+                dcInW = (Double(vInMV) * Double(iInMA)) / 1_000_000.0
+            } else if sysPowerInMW > 0 {
+                dcInW = Double(sysPowerInMW) / 1000.0
             }
 
-            if sysPowerInMW > 0 {
-                adapterInW = Double(sysPowerInMW) / 1000.0
+            if energyConsumedMW > 0 {
+                systemTotalW = Double(energyConsumedMW) / 1000.0
+            } else if sysLoadMW > 0 {
+                systemTotalW = Double(sysLoadMW) / 1000.0
             }
 
             if let batPowerMW = telemetry["BatteryPower"] as? Int, batPowerMW != 0, batteryNetW == 0 {
@@ -74,8 +79,11 @@ public final class PowerTelemetryService {
             }
         }
 
-        if systemLoadW == 0 {
-            systemLoadW = abs(batteryNetW) > 0 ? abs(batteryNetW) : adapterInW
+        if !externalConnected {
+            dcInW = 0.0
+        }
+        if systemTotalW == 0 {
+            systemTotalW = abs(batteryNetW) > 0 ? abs(batteryNetW) : dcInW
         }
 
         var remainingmAh = 0
@@ -86,9 +94,9 @@ public final class PowerTelemetryService {
         }
 
         return (
-            systemLoadW: systemLoadW,
+            systemTotalW: systemTotalW,
+            dcInW: dcInW,
             batteryNetW: batteryNetW,
-            adapterInW: adapterInW,
             adapterMaxWatts: adapterMaxWatts,
             voltageV: voltageV,
             amperagemA: amperage,

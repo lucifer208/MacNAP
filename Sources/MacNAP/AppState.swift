@@ -157,16 +157,15 @@ public final class AppState: ObservableObject {
         let scannedPeripherals = telemetry.scanPeripherals(partitions: parts)
         let periphW = scannedPeripherals.reduce(0.0) { $0 + $1.watts }
         let periphSleepW = scannedPeripherals.reduce(0.0) { $0 + $1.sleepWatts }
-        let coreW = max(0.5, p.systemLoadW - periphW)
 
         let previousByID = Dictionary(uniqueKeysWithValues: self.peripherals.map { ($0.id, $0) })
 
         self.externalPartitions = parts
-        self.systemLoadWatts = p.systemLoadW
-        self.cpuCoreWatts = coreW
+        self.systemLoadWatts = p.systemTotalW
+        self.cpuCoreWatts = max(0.5, p.systemTotalW - periphW)
         self.batteryNetWatts = p.batteryNetW
         self.chargingIntoBatteryWatts = max(0.0, p.batteryNetW)
-        self.adapterWatts = p.adapterInW
+        self.adapterWatts = p.dcInW
         self.adapterMaxWatts = p.adapterMaxWatts
         self.peripherals = scannedPeripherals
         self.peripheralsTotalWatts = periphW
@@ -229,11 +228,11 @@ public final class AppState: ObservableObject {
 
         let sample = PowerSample(
             timestamp: now,
-            systemLoadWatts: p.systemLoadW,
-            cpuCoreWatts: coreW,
+            systemLoadWatts: p.systemTotalW,
+            cpuCoreWatts: max(0.5, p.systemTotalW - periphW),
             peripheralsWatts: periphW,
             batteryWatts: abs(p.batteryNetW),
-            adapterInputWatts: max(0.0, p.batteryNetW),
+            adapterInputWatts: p.dcInW,
             batteryPercent: p.percent
         )
         samples.append(sample)

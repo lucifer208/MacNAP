@@ -86,41 +86,27 @@ public struct DashboardView: View {
 
     private var kpiGrid: some View {
         let lastSession = state.currentSleepSession
-        let chargingCardValue: String = {
-            if !state.externalConnected {
-                return "0.00 W (Dùng Pin)"
-            }
-            if state.chargingIntoBatteryWatts > 0.05 {
-                return String(format: "+%.2f W vào Pin", state.chargingIntoBatteryWatts)
-            }
-            return "0.00 W (Giữ Pin)"
-        }()
-
-        let chargingCardSubtitle: String = {
-            if !state.externalConnected {
-                return String(format: "Đang xả từ Pin: -%.2f W (%d mA)", abs(state.batteryNetWatts), abs(state.amperagemA))
-            }
-            if state.chargingIntoBatteryWatts > 0.05 {
-                return String(format: "Dòng nạp: +%d mA • Nguồn PD cấp %.1fW (Max %dW)", state.amperagemA, state.adapterWatts, state.adapterMaxWatts)
-            }
-            return String(format: "Chế độ Bypass tại %d%% • Sạc PD nuôi máy %.1fW (Max %dW)", state.batteryPercent, state.adapterWatts, state.adapterMaxWatts)
-        }()
-
         return HStack(spacing: 12) {
             kpiCard(
-                title: "Công suất tiêu thụ thực (Out)",
+                title: "System Total (Công suất tiêu thụ)",
                 value: String(format: "%.2f W", state.systemLoadWatts),
                 subtitle: String(format: "Core: %.2fW • Ngoại vi: %.2fW • Pin: %d%%", state.cpuCoreWatts, state.peripheralsTotalWatts, state.batteryPercent),
-                icon: "bolt.fill",
-                color: .orange
+                icon: "bolt.fill"
             )
 
             kpiCard(
-                title: "Đang sạc vào Pin (In)",
-                value: chargingCardValue,
-                subtitle: chargingCardSubtitle,
-                icon: state.externalConnected ? "powerplug.fill" : "battery.75percent",
-                color: state.chargingIntoBatteryWatts > 0.05 ? .green : .cyan
+                title: "DC In (Công suất nguồn sạc vào)",
+                value: state.externalConnected
+                    ? String(format: "%.2f W", state.adapterWatts)
+                    : "0.00 W (Dùng Pin)",
+                subtitle: state.externalConnected
+                    ? String(
+                        format: "Adapter Max %dW • Pin: %@",
+                        state.adapterMaxWatts,
+                        state.chargingIntoBatteryWatts > 0.05 ? String(format: "Đang nạp +%.1fW", state.chargingIntoBatteryWatts) : "Bypass (Giữ Pin)"
+                    )
+                    : String(format: "Đang xả từ Pin: -%.2f W", abs(state.batteryNetWatts)),
+                icon: state.externalConnected ? "powerplug.fill" : "battery.75percent"
             )
 
             kpiCard(
@@ -131,34 +117,32 @@ public struct DashboardView: View {
                 subtitle: lastSession != nil
                     ? String(format: "%.1fh ngủ • %d DarkWake • Rò %.2f W", lastSession!.durationHours, lastSession!.darkWakeCount, lastSession!.averageDrainWatts)
                     : "Đọc chuẩn từ pmset -g log",
-                icon: "bed.double.fill",
-                color: .red
+                icon: "bed.double.fill"
             )
 
             kpiCard(
                 title: "Dự đoán % Pin khi dùng MacNAP",
                 value: String(
-                    format: "Chỉ mất -%.1f%% → -%.1f%%",
+                    format: "-%.1f%% → -%.1f%%",
                     state.predictedDropPercentWithFullGuard,
                     state.predictedDropPercentWithAutoUnmount
                 ),
                 subtitle: String(
-                    format: "Tiết kiệm +%d%% đến +%d%% pin mỗi đêm (Giữ lại ~%d%% sáng hôm sau)",
+                    format: "Tiết kiệm +%d%% đến +%d%% pin/đêm (Còn ~%d%% sáng hôm sau)",
                     max(1, state.realLastNightDropPercent - Int(round(state.predictedDropPercentWithAutoUnmount))),
                     max(1, state.realLastNightDropPercent - Int(round(state.predictedDropPercentWithFullGuard))),
                     max(0, 100 - Int(round(state.predictedDropPercentWithFullGuard)))
                 ),
-                icon: "sparkles",
-                color: .green
+                icon: "sparkles"
             )
         }
     }
 
-    private func kpiCard(title: String, value: String, subtitle: String, icon: String, color: Color) -> some View {
+    private func kpiCard(title: String, value: String, subtitle: String, icon: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
+            HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .foregroundStyle(color)
+                    .foregroundStyle(.secondary)
                 Text(title)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -434,8 +418,8 @@ public struct DashboardView: View {
                 .frame(height: 185)
 
                 HStack(spacing: 16) {
-                    legendDot(color: .orange, label: String(format: "Tiêu thụ thực: %.2fW", state.systemLoadWatts))
-                    legendDot(color: .green, label: String(format: "Sạc vào Pin: %.2fW (Nguồn PD: %.1fW)", state.chargingIntoBatteryWatts, state.adapterWatts))
+                    legendDot(color: .orange, label: String(format: "System Total: %.2fW", state.systemLoadWatts))
+                    legendDot(color: .green, label: String(format: "DC In: %.2fW", state.externalConnected ? state.adapterWatts : 0.0))
                     legendDot(color: .pink, label: String(format: "Ngoại vi: %.2fW", state.peripheralsTotalWatts))
                 }
                 .font(.caption2)
@@ -516,7 +500,7 @@ public struct DashboardView: View {
                 HStack(spacing: 12) {
                     Image(systemName: dev.kind.iconName)
                         .font(.title3)
-                        .foregroundStyle(dev.canUnmount ? (dev.isMounted ? .pink : .green) : .blue)
+                        .foregroundStyle(.secondary)
                         .frame(width: 28)
 
                     VStack(alignment: .leading, spacing: 3) {
@@ -593,7 +577,7 @@ public struct DashboardView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.yellow)
+                        .foregroundStyle(.secondary)
                     Text("Tiến trình giữ máy thức (Assertions & Watt hao phí)")
                         .font(.headline)
                     Spacer()
@@ -666,7 +650,7 @@ public struct DashboardView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Image(systemName: "doc.text.magnifyingglass")
-                        .foregroundStyle(.cyan)
+                        .foregroundStyle(.secondary)
                     Text("Nhật ký Nguồn chi tiết (pmset Power Log)")
                         .font(.headline)
                     Spacer()
