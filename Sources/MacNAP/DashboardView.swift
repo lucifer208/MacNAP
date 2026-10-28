@@ -37,6 +37,9 @@ public struct DashboardView: View {
             .background(Color(nsColor: .windowBackgroundColor))
         }
         .frame(minWidth: 1080, minHeight: 750)
+        .sheet(isPresented: $state.showDonateSheet) {
+            DonateSheetView(state: state)
+        }
     }
 
     // MARK: - Sidebar Navigation
@@ -46,11 +49,20 @@ public struct DashboardView: View {
             HStack(spacing: 12) {
                 SleepingMacIconView(size: 40)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("MacNAP")
-                        .font(.title3.bold())
-                    Text("AppleSMC & Sleep Guard")
+                    HStack(spacing: 6) {
+                        Text("MacNAP")
+                            .font(.title3.bold())
+                        Text("v\(state.appVersion)")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.cyan.opacity(0.16), in: Capsule())
+                            .foregroundStyle(.cyan)
+                    }
+                    Text(L.t("Quản lý Nguồn & Bảo vệ Pin", "Power & Sleep Battery Guard"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
                 Spacer()
             }
@@ -69,37 +81,49 @@ public struct DashboardView: View {
 
             // Grouped & Perfectly Aligned Sidebar Footer
             VStack(alignment: .leading, spacing: 10) {
-                // Cluster 1: Live Power Telemetry
-                VStack(spacing: 5) {
+                // Cluster 1: Live Power Telemetry (Clean single-line rows + Top Power Mode Pill)
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 6) {
+                        Image(systemName: state.externalConnected ? "bolt.shield.fill" : "battery.75percent")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(state.externalConnected ? .mint : .orange)
+                        Text(state.powerSupplyShortLabel)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(state.externalConnected ? .mint : .orange)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(
+                        (state.externalConnected ? Color.mint : Color.orange).opacity(0.14),
+                        in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    )
+
                     sidebarMetricRow(
                         icon: "bolt.fill",
                         color: .orange,
-                        label: "System Total",
+                        label: L.t("Tổng tiêu thụ", "Total Load"),
                         value: String(format: "%.2f W", state.systemLoadWatts)
                     )
                     sidebarMetricRow(
                         icon: "cable.connector.horizontal",
                         color: .pink,
-                        label: L.t("Ngoại vi (USB/TB)", "Peripherals"),
+                        label: L.t("Thiết bị ngoại vi", "Peripherals"),
                         value: String(format: "%.2f W", state.peripheralsTotalWatts)
                     )
                     sidebarMetricRow(
                         icon: "powerplug.fill",
                         color: .green,
-                        label: "DC In (Max \(state.macMaxSupportedWatts)W)",
+                        label: L.t("Sạc vào (Max \(state.macMaxSupportedWatts)W)", "Power In (Max \(state.macMaxSupportedWatts)W)"),
                         value: String(format: "%.2f W", state.externalConnected ? state.adapterWatts : 0.0)
-                    )
-                    sidebarMetricRow(
-                        icon: state.externalConnected ? "bolt.shield.fill" : "battery.50",
-                        color: state.externalConnected ? .mint : .yellow,
-                        label: L.t("Chế độ nguồn", "Power Mode"),
-                        value: state.powerSupplyShortLabel
                     )
                     sidebarMetricRow(
                         icon: "battery.75percent",
                         color: .cyan,
                         label: L.t("Pin hiện tại", "Battery"),
-                        value: "\(state.batteryPercent)% (\(state.remainingmAh)mAh)"
+                        value: "\(state.batteryPercent)% · \(state.remainingmAh)mAh"
                     )
                 }
                 .padding(10)
@@ -124,14 +148,65 @@ public struct DashboardView: View {
                 .padding(10)
                 .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
 
-                // Cluster 3: Hệ thống & Giao diện (System & Interface)
+                // Cluster 3: Hệ thống, Cập nhật & Ủng hộ (System, Update & Donate)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(L.groupSystemPrefs)
-                        .font(.system(size: 9.5, weight: .bold))
-                        .foregroundStyle(.secondary)
+                    HStack {
+                        Text(L.groupSystemPrefs)
+                            .font(.system(size: 9.5, weight: .bold))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("v\(state.appVersion)")
+                            .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.cyan)
+                    }
 
                     sidebarToggleRow(title: L.launchAtLogin, isOn: $state.launchAtLogin)
                     sidebarToggleRow(title: L.hideDockIcon, isOn: $state.hideDockIcon)
+                    sidebarToggleRow(
+                        title: L.t("Tự động kiểm tra & cập nhật", "Auto-check & update"),
+                        isOn: $state.autoUpdateEnabled
+                    )
+
+                    HStack(spacing: 6) {
+                        Button {
+                            if case .updateAvailable(let manifest) = state.updateStatus {
+                                state.performSelfUpdateNow(manifest: manifest)
+                            } else {
+                                state.checkForUpdates(silentIfUpToDate: false)
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                                    .font(.system(size: 10, weight: .bold))
+                                Text(sidebarUpdateButtonTitle)
+                                    .font(.system(size: 10.5, weight: .semibold))
+                                    .lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 5)
+                            .background(Color.cyan.opacity(0.16), in: RoundedRectangle(cornerRadius: 6))
+                            .foregroundStyle(.cyan)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            state.showDonateSheet = true
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "heart.fill")
+                                    .font(.system(size: 10, weight: .bold))
+                                Text(L.t("Ủng hộ", "Donate"))
+                                    .font(.system(size: 10.5, weight: .semibold))
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color.pink.opacity(0.18), in: RoundedRectangle(cornerRadius: 6))
+                            .foregroundStyle(.pink)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.top, 2)
                 }
                 .padding(10)
                 .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
@@ -142,18 +217,22 @@ public struct DashboardView: View {
     }
 
     private func sidebarMetricRow(icon: String, color: Color, label: String, value: String) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 7) {
             Image(systemName: icon)
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(color)
-                .frame(width: 16, alignment: .center)
+                .frame(width: 15, alignment: .center)
             Text(label)
                 .font(.system(size: 11.5, weight: .medium))
                 .foregroundStyle(.secondary)
-            Spacer()
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+            Spacer(minLength: 6)
             Text(value)
                 .font(.system(size: 11.5, weight: .bold, design: .monospaced))
                 .foregroundStyle(.primary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
         }
     }
 
@@ -199,13 +278,37 @@ public struct DashboardView: View {
         }
     }
 
+    private var sidebarUpdateButtonTitle: String {
+        let L = state.l10n
+        switch state.updateStatus {
+        case .checking:
+            return L.t("Đang kiểm tra...", "Checking...")
+        case .updateAvailable(let manifest):
+            return L.t("Cập nhật v\(manifest.version)", "Update v\(manifest.version)")
+        case .installing:
+            return L.t("Đang cập nhật...", "Updating...")
+        case .upToDate:
+            return L.t("Bản mới nhất v\(state.appVersion)", "Up to date v\(state.appVersion)")
+        default:
+            return L.t("Kiểm tra Update", "Check Update")
+        }
+    }
+
     // MARK: - Top Status Action Bar
     private var topStatusToolbar: some View {
         let L = state.l10n
-        return HStack(spacing: 12) {
+        return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(L.sectionTitle(state.selectedSection))
-                    .font(.headline)
+                HStack(spacing: 8) {
+                    Text(L.sectionTitle(state.selectedSection))
+                        .font(.headline)
+                    Text("Release v\(state.appVersion)")
+                        .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(Color.green.opacity(0.16), in: Capsule())
+                        .foregroundStyle(.green)
+                }
                 Text(state.lastActionLog)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -213,6 +316,27 @@ public struct DashboardView: View {
             }
 
             Spacer()
+
+            Button {
+                if case .updateAvailable(let manifest) = state.updateStatus {
+                    state.performSelfUpdateNow(manifest: manifest)
+                } else {
+                    state.checkForUpdates(silentIfUpToDate: false)
+                }
+            } label: {
+                Label(sidebarUpdateButtonTitle, systemImage: "arrow.triangle.2.circlepath")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            Button {
+                state.showDonateSheet = true
+            } label: {
+                Label(L.t("Ủng hộ (Donate)", "Donate"), systemImage: "heart.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.pink)
+            .controlSize(.small)
 
             HStack(spacing: 6) {
                 Image(systemName: "globe")
@@ -225,7 +349,7 @@ public struct DashboardView: View {
                 }
                 .labelsHidden()
                 .pickerStyle(.menu)
-                .frame(width: 125)
+                .frame(width: 120)
             }
         }
         .padding(.horizontal, 24)
@@ -281,13 +405,13 @@ public struct DashboardView: View {
 
         return HStack(spacing: 14) {
             kpiCard(
-                title: L.t("CÔNG SUẤT TIÊU THỤ (SYSTEM)", "SYSTEM TOTAL POWER"),
+                title: L.kpiSystemTotal,
                 mainValue: String(format: "%.2f W", state.systemLoadWatts),
                 badgeText: L.t("Pin \(state.batteryPercent)%", "Bat \(state.batteryPercent)%"),
                 badgeColor: .orange,
                 footerLine1: L.t(
-                    String(format: "🔌 Thiết bị ngoại vi: %.2f W • Core: %.2f W", state.peripheralsTotalWatts, state.cpuCoreWatts),
-                    String(format: "🔌 Peripherals: %.2f W • Core: %.2f W", state.peripheralsTotalWatts, state.cpuCoreWatts)
+                    String(format: "🔌 Thiết bị ngoại vi: %.2f W • Hệ thống: %.2f W", state.peripheralsTotalWatts, state.cpuCoreWatts),
+                    String(format: "🔌 Peripherals: %.2f W • System: %.2f W", state.peripheralsTotalWatts, state.cpuCoreWatts)
                 ),
                 footerLine2: L.t(
                     String(format: "Cổng USB-C Out: %.2f W • Unmount còn: %.2f W", state.portOutWatts, state.peripheralsSleepWatts),
@@ -298,7 +422,7 @@ public struct DashboardView: View {
             )
 
             kpiCard(
-                title: L.kpiDCIn,
+                title: L.t("CÔNG SUẤT SẠC VÀO (MAX \(state.macMaxSupportedWatts)W)", "CHARGING POWER IN (MAX \(state.macMaxSupportedWatts)W)"),
                 mainValue: state.externalConnected
                     ? String(format: "%.2f W", state.adapterWatts)
                     : L.t("0.00 W", "0.00 W"),
@@ -445,7 +569,7 @@ public struct DashboardView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Label(
-                        L.t("Biểu đồ AppleSMC Realtime (1.0s): System Total vs DC In", "Realtime AppleSMC (1.0s): System Total vs DC In"),
+                        L.t("Biểu đồ Công suất Thời gian thực (1.0s): Tiêu thụ vs Sạc vào", "Realtime Power Chart (1.0s): Power Load vs Power In"),
                         systemImage: "waveform.path.ecg"
                     )
                     .font(.headline)
@@ -471,16 +595,16 @@ public struct DashboardView: View {
 
                         LineMark(
                             x: .value("Time", sample.timestamp),
-                            y: .value("System Total (W)", sample.systemLoadWatts),
-                            series: .value("Type", "System Total")
+                            y: .value("Tiêu thụ (W)", sample.systemLoadWatts),
+                            series: .value("Type", "Total Load")
                         )
                         .foregroundStyle(.orange)
                         .lineStyle(StrokeStyle(lineWidth: 2.5))
 
                         LineMark(
                             x: .value("Time", sample.timestamp),
-                            y: .value("DC In (W)", sample.adapterInputWatts),
-                            series: .value("Type", "DC In")
+                            y: .value("Sạc vào (W)", sample.adapterInputWatts),
+                            series: .value("Type", "Power In")
                         )
                         .foregroundStyle(.green)
                         .lineStyle(StrokeStyle(lineWidth: 2.0, dash: [5, 3]))
@@ -490,9 +614,9 @@ public struct DashboardView: View {
                 .frame(height: 205)
 
                 HStack(spacing: 18) {
-                    legendDot(color: .orange, label: String(format: "System Total (PSTR): %.2f W", state.systemLoadWatts))
-                    legendDot(color: .green, label: String(format: "DC In (PDTR): %.2f W", state.externalConnected ? state.adapterWatts : 0.0))
-                    legendDot(color: .cyan, label: String(format: "TB Right: %.2f W • TB Left: %.2f W", state.tbRightWatts, state.tbLeftWatts))
+                    legendDot(color: .orange, label: L.t(String(format: "Tổng tiêu thụ: %.2f W", state.systemLoadWatts), String(format: "Total Load: %.2f W", state.systemLoadWatts)))
+                    legendDot(color: .green, label: L.t(String(format: "Nguồn sạc vào: %.2f W", state.externalConnected ? state.adapterWatts : 0.0), String(format: "Power In: %.2f W", state.externalConnected ? state.adapterWatts : 0.0)))
+                    legendDot(color: .cyan, label: L.t(String(format: "Thiết bị ngoại vi: %.2f W", state.peripheralsTotalWatts), String(format: "Peripherals: %.2f W", state.peripheralsTotalWatts)))
                 }
                 .font(.caption2)
             }
@@ -569,8 +693,8 @@ public struct DashboardView: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(
                             L.t(
-                                "Biểu đồ Phiên Ngủ Thực Tế kiểu Sleep Aid (Sleep / CloseLid)",
-                                "Sleep Aid Interactive Timeline (Sleep / CloseLid)"
+                                "Biểu đồ Phân tích Hao Pin khi Sleep / CloseLid",
+                                "Sleep / CloseLid Battery Drain Timeline"
                             )
                         )
                         .font(.headline)
@@ -963,13 +1087,13 @@ public struct DashboardView: View {
             )
 
             kpiCard(
-                title: L.t("TỶ TRỌNG NGOẠI VI / SYSTEM TOTAL", "PERIPHERALS VS SYSTEM TOTAL"),
-                mainValue: "\(pctOfSystem)% System",
+                title: L.t("TỶ TRỌNG NGOẠI VI / TỔNG TIÊU THỤ", "PERIPHERALS VS TOTAL LOAD"),
+                mainValue: L.t("\(pctOfSystem)% Tổng tải", "\(pctOfSystem)% Total"),
                 badgeText: String(format: "%.2fW / %.2fW", state.peripheralsTotalWatts, state.systemLoadWatts),
                 badgeColor: .cyan,
                 footerLine1: L.t(
-                    String(format: "Ngoại vi: %.2f W • Hệ thống Core: %.2f W", state.peripheralsTotalWatts, state.cpuCoreWatts),
-                    String(format: "Peripherals: %.2f W • Core System: %.2f W", state.peripheralsTotalWatts, state.cpuCoreWatts)
+                    String(format: "Ngoại vi: %.2f W • Hệ thống: %.2f W", state.peripheralsTotalWatts, state.cpuCoreWatts),
+                    String(format: "Peripherals: %.2f W • System: %.2f W", state.peripheralsTotalWatts, state.cpuCoreWatts)
                 ),
                 footerLine2: state.powerSupplyStatusText,
                 icon: "gauge.with.dots.needle.67percent",
@@ -1120,7 +1244,7 @@ public struct DashboardView: View {
                         .controlSize(.small)
                         .frame(width: 92)
                     } else {
-                        Text("SMC / USB Bus")
+                        Text(L.t("Nguồn Cổng USB", "USB Bus Power"))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                             .frame(width: 92, alignment: .trailing)

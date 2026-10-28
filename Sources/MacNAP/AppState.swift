@@ -5,7 +5,7 @@ import ServiceManagement
 
 public enum DashboardSection: String, CaseIterable, Identifiable {
     case overview = "Tổng quan & Realtime"
-    case sleepAid = "Phân tích Phiên Ngủ (Sleep Aid)"
+    case sleepAid = "Phân tích Sleep / CloseLid"
     case peripherals = "Ngoại vi & Auto-Unmount"
     case powerLog = "Nhật ký Nguồn & Assertions"
 
@@ -114,7 +114,16 @@ public final class AppState: ObservableObject {
             applyDockVisibilityPolicy()
         }
     }
-    @Published public var lastActionLog: String = "Đã đồng bộ cảm biến AppleSMC realtime (1s)."
+    public let appVersion: String = AppUpdaterService.currentVersion
+    public let appBuild: Int = AppUpdaterService.currentBuild
+    @Published public var updateStatus: UpdateCheckStatus = .idle
+    @Published public var autoUpdateEnabled: Bool = (UserDefaults.standard.object(forKey: "MacNAP_AutoUpdate") as? Bool) ?? true {
+        didSet {
+            UserDefaults.standard.set(autoUpdateEnabled, forKey: "MacNAP_AutoUpdate")
+        }
+    }
+    @Published public var showDonateSheet: Bool = false
+    @Published public var lastActionLog: String = "Đang theo dõi công suất & thiết bị ngoại vi thời gian thực (1.0s)."
 
     private let telemetry = PowerTelemetryService()
     private let guardService = SleepMountGuardService()
@@ -128,7 +137,7 @@ public final class AppState: ObservableObject {
         AppDiagnosticLogger.shared.log(
             .info,
             component: "Startup",
-            message: "Khởi động MacNAP Daemon • File log: \(AppDiagnosticLogger.shared.primaryLogURL.path)"
+            message: "Khởi động MacNAP v\(AppUpdaterService.currentVersion) (Build \(AppUpdaterService.currentBuild)) • File log: \(AppDiagnosticLogger.shared.primaryLogURL.path)"
         )
         self.appDiagnosticLogs = AppDiagnosticLogger.shared.recentEntries()
         applyDockVisibilityPolicy()
@@ -136,6 +145,9 @@ public final class AppState: ObservableObject {
         syncDarkWakeSettingState()
         refreshAll()
         refreshWakeLogs()
+        if autoUpdateEnabled {
+            checkForUpdates(silentIfUpToDate: true)
+        }
         actionHistory.append(
             SleepGuardLogEntry(
                 timestamp: Date(),
@@ -175,6 +187,58 @@ public final class AppState: ObservableObject {
         AppDiagnosticLogger.shared.clearLogs()
         appDiagnosticLogs = AppDiagnosticLogger.shared.recentEntries()
         lastActionLog = "Đã làm sạch file log hoạt động."
+    }
+
+    public func checkForUpdates(silentIfUpToDate: Bool = false) {
+        guard updateStatus != .checking else { return }
+        updateStatus = .checking
+        if !silentIfUpToDate {
+            lastActionLog = l10n.t("Đang kiểm tra bản cập nhật mới...", "Checking for updates...")
+        }
+        Task {
+            let status = await Task.detached(priority: .utility) {
+                await AppUpdaterService.shared.checkForUpdates()
+            }.value
+            self.updateStatus = status
+            self.appDiagnosticLogs = AppDiagnosticLogger.shared.recentEntries()
+
+            switch status {
+            case .upToDate(let v, _):
+                if !silentIfUpToDate {
+                    self.lastActionLog = self.l10n.t(
+                        "Bạn đang dùng phiên bản mới nhất v\(v) (Official Release).",
+                        "You are on the latest version v\(v) (Official Release)."
+                    )
+                }
+            case .updateAvailable(let manifest):
+                self.lastActionLog = self.l10n.t(
+                    "Đã có bản cập nhật mới v\(manifest.version)! Nhấn 'Cập nhật ngay' để cài đặt.",
+                    "New update v\(manifest.version) available! Click 'Update Now' to install."
+                )
+                if self.autoUpdateEnabled && !silentIfUpToDate {
+                    self.performSelfUpdateNow(manifest: manifest)
+                }
+            case .failed(let reason):
+                self.lastActionLog = reason
+            default:
+                break
+            }
+        }
+    }
+
+    public func performSelfUpdateNow(manifest: ReleaseManifest? = nil) {
+        let targetVer = manifest?.version ?? appVersion
+        updateStatus = .installing(progressText: "v\(targetVer)")
+        lastActionLog = l10n.t("Đang tự động tải & cài đặt bản cập nhật v\(targetVer)...", "Installing update v\(targetVer)...")
+        Task {
+            let res = await Task.detached(priority: .userInitiated) {
+                await AppUpdaterService.shared.performSelfUpdate(manifest: manifest)
+            }.value
+            self.lastActionLog = res.message
+            if !res.success {
+                self.updateStatus = .failed(reason: res.message)
+            }
+        }
     }
 
     public func applyCustomDockIcon() {
@@ -792,19 +856,19 @@ public final class AppState: ObservableObject {
             if isCharging || batteryNetWatts >= 1.5 {
                 let chgW = max(0.0, batteryNetWatts > 0 ? batteryNetWatts : max(0.0, adapterWatts - systemLoadWatts))
                 return L.t(
-                    String(format: "Sạc vào Pin (+%.2fW)", chgW),
-                    String(format: "Charging (+%.2fW)", chgW)
+                    String(format: "Đang sạc vào Pin (+%.2fW)", chgW),
+                    String(format: "Charging Battery (+%.2fW)", chgW)
                 )
             } else {
                 return L.t(
-                    String(format: "Nguồn trực tiếp (+%.2fW Pin)", max(0.0, batteryNetWatts)),
-                    String(format: "Direct AC (+%.2fW Bat)", max(0.0, batteryNetWatts))
+                    String(format: "Dùng nguồn trực tiếp (+%.2fW Pin)", max(0.0, batteryNetWatts)),
+                    String(format: "Direct AC Power (+%.2fW Bat)", max(0.0, batteryNetWatts))
                 )
             }
         } else {
             return L.t(
-                String(format: "Xả từ Pin (-%.2fW)", max(systemLoadWatts, abs(batteryNetWatts))),
-                String(format: "Discharging (-%.2fW)", max(systemLoadWatts, abs(batteryNetWatts)))
+                String(format: "Đang dùng Pin (-%.2fW)", max(systemLoadWatts, abs(batteryNetWatts))),
+                String(format: "On Battery (-%.2fW)", max(systemLoadWatts, abs(batteryNetWatts)))
             )
         }
     }

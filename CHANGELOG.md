@@ -2,6 +2,18 @@
 
 ## [Unreleased] - 2026-10-28
 
+### [12:05] feat: official Release v1.0.0, redesign Sidebar Power box, remove AppleSMC/Sleep Aid jargon, add Check Update / Auto-Update & Donate modal
+- **Phát hành phiên bản chính thức `v1.0.0` (`VERSION`, `scripts/bundle.sh`, `releases/latest.json`)**:
+  - Thiết lập chuẩn `CFBundleShortVersionString = 1.0.0` (Build `100`), tự động đóng gói bản phát hành `releases/MacNAP-v1.0.0.zip` và manifest `releases/latest.json`.
+- **Cơ chế Kiểm tra Cập nhật (`Check Update`) & Tự động Cập nhật (`Auto-Update`) (`AppUpdateAndDonateService.swift`, `AppState.swift`)**:
+  - Thêm công tắc **Tự động kiểm tra & cập nhật** (`autoUpdateEnabled`) và nút **Kiểm tra Update / Cập nhật ngay** trên cả thanh Toolbar trên cùng, Sidebar và Menu Bar Popover.
+  - Hỗ trợ tự động kiểm tra manifest phiên bản mới, giải nén/biên dịch bản cập nhật mới và tự khởi động lại (`relaunchApp`) liền mạch.
+- **Cơ chế Ủng hộ tác giả (`DonateSheetView` trong `AppUpdateAndDonateService.swift`)**:
+  - Bổ sung nút **❤️ Ủng hộ (Donate)** trên Toolbar, Sidebar và Menu Bar, mở cửa sổ Donate tích hợp mã QR tạo trực tiếp bằng `CoreImage` (`CIQRCodeGenerator`), chọn mức ủng hộ (`3$ ☕️`, `5$ 🍜`, `10$ 🚀`, `25$ 💎`) và 3 kênh ủng hộ nhanh (`Buy Me a Coffee`, `PayPal / Chuyển khoản`, `GitHub Sponsors & Star`).
+- **Thiết kế lại cụm Nguồn ở Sidebar & Xoá bỏ toàn bộ từ khoá kỹ thuật thừa (`AppleSMC`, `PSTR`, `PDTR`, `Sleep Aid`) (`DashboardView.swift`, `MacNAPApp.swift`, `MenuBarPopoverView.swift`)**:
+  - Đổi tiêu đề cửa sổ thành **`MacNAP — Quản lý Nguồn & Bảo vệ Pin`**; đổi toàn bộ tiêu đề thẻ KPI, biểu đồ và chú thích về đúng tên chức năng thực tế (`Tổng tiêu thụ`, `Thiết bị ngoại vi`, `Sạc vào (Max 140W)`, `Pin hiện tại`).
+  - Đưa trạng thái nguồn (`Dùng nguồn trực tiếp (+0.47W Pin)` / `Đang sạc vào Pin` / `Đang dùng Pin`) lên thanh huy hiệu ngang 1 dòng ở đầu khung Sidebar, chấm dứt hoàn toàn lỗi rớt dòng 3 hàng.
+
 ### [11:55] feat: redesign Sleep Aid timeline card, comparison pills, bottom DarkWake tick strip & interactive event inspector
 - **Thiết kế lại bố cục Header & Điều khiển của Biểu đồ Phiên Ngủ (`DashboardView.swift`)**:
   - **Hàng 1**: Tách riêng cụm Tiêu đề + Mô tả bên trái và bộ chuyển chế độ (`Theo lần Sleep / CloseLid` | `Theo Ngày (Từ 00:00)`) cố định kích thước + nút `Đọc lại log` bên phải, chấm dứt hoàn toàn lỗi đè chữ lên nhau.

@@ -82,13 +82,19 @@ public struct MenuBarPopoverView: View {
                     miniMetricBox(
                         icon: "bolt.fill",
                         color: .orange,
-                        label: String(format: "System (Ngoại vi %.2fW)", state.peripheralsTotalWatts),
+                        label: L.t(
+                            String(format: "Tiêu thụ (Ngoại vi %.2fW)", state.peripheralsTotalWatts),
+                            String(format: "Load (Periph %.2fW)", state.peripheralsTotalWatts)
+                        ),
                         value: String(format: "%.2f W", state.systemLoadWatts)
                     )
                     miniMetricBox(
                         icon: "powerplug.fill",
                         color: .green,
-                        label: "DC In (Max \(state.macMaxSupportedWatts)W)",
+                        label: L.t(
+                            "Sạc vào (Max \(state.macMaxSupportedWatts)W)",
+                            "Power In (Max \(state.macMaxSupportedWatts)W)"
+                        ),
                         value: String(format: "%.2f W", state.externalConnected ? state.adapterWatts : 0.0)
                     )
                 }
@@ -252,11 +258,21 @@ public struct MenuBarPopoverView: View {
                 .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
 
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(L.groupSystemPrefs)
-                        .font(.system(size: 9.5, weight: .bold))
-                        .foregroundStyle(.secondary)
+                    HStack {
+                        Text(L.groupSystemPrefs)
+                            .font(.system(size: 9.5, weight: .bold))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("v\(state.appVersion)")
+                            .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.cyan)
+                    }
                     compactToggleRow(title: L.launchAtLogin, isOn: $state.launchAtLogin)
                     compactToggleRow(title: L.hideDockIcon, isOn: $state.hideDockIcon)
+                    compactToggleRow(
+                        title: L.t("Tự động kiểm tra & cập nhật", "Auto-check & update"),
+                        isOn: $state.autoUpdateEnabled
+                    )
                 }
                 .padding(8)
                 .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
@@ -264,11 +280,48 @@ public struct MenuBarPopoverView: View {
 
             Divider()
 
-            HStack {
-                Text("MacNAP v1.4 • AppleSMC Realtime")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                Button {
+                    if case .updateAvailable(let manifest) = state.updateStatus {
+                        state.performSelfUpdateNow(manifest: manifest)
+                    } else {
+                        state.checkForUpdates(silentIfUpToDate: false)
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 10, weight: .bold))
+                        Text(L.t("Kiểm tra Update", "Check Update"))
+                            .font(.system(size: 10.5, weight: .semibold))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.cyan.opacity(0.15), in: Capsule())
+                    .foregroundStyle(.cyan)
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    onOpenDashboard()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        state.showDonateSheet = true
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 10, weight: .bold))
+                        Text(L.t("Ủng hộ", "Donate"))
+                            .font(.system(size: 10.5, weight: .semibold))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.pink.opacity(0.18), in: Capsule())
+                    .foregroundStyle(.pink)
+                }
+                .buttonStyle(.plain)
+
                 Spacer()
+
                 Button(L.quitApp) {
                     NSApplication.shared.terminate(nil)
                 }

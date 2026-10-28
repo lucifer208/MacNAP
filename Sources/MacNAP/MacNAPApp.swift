@@ -55,7 +55,7 @@ public final class MacNAPAppDelegate: NSObject, NSApplicationDelegate {
         )
         let hosting = NSHostingController(rootView: rootView)
         let win = NSWindow(contentViewController: hosting)
-        win.title = "MacNAP — AppleSMC & Sleep Aid Watt Profiler"
+        win.title = "MacNAP — Quản lý Nguồn & Bảo vệ Pin"
 
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let targetWidth = min(1280, max(1160, screenFrame.width - 60))

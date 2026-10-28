@@ -53,8 +53,8 @@ public struct L10n {
     public var groupSystemPrefs: String { t("HỆ THỐNG & GIAO DIỆN", "SYSTEM & INTERFACE") }
 
     // KPI Titles
-    public var kpiSystemTotal: String { t("CÔNG SUẤT TIÊU THỤ (SYSTEM TOTAL)", "SYSTEM TOTAL POWER") }
-    public var kpiDCIn: String { t("NGUỒN SẠC VÀO (DC IN)", "DC IN ADAPTER POWER") }
-    public var kpiLastSleep: String { t("PHIÊN SLEEP / CLOSELID (CHƯA BẬT APP)", "SLEEP / CLOSELID (UNPROTECTED)") }
-    public var kpiWithMacNAP: String { t("ƯỚC TÍNH KHI BẬT MACNAP GUARD", "ESTIMATED WITH MACNAP GUARD") }
+    public var kpiSystemTotal: String { t("TỔNG CÔNG SUẤT TIÊU THỤ", "TOTAL POWER CONSUMPTION") }
+    public var kpiDCIn: String { t("CÔNG SUẤT SẠC VÀO (MAX 140W)", "CHARGING POWER IN") }
+    public var kpiLastSleep: String { t("HAO PIN KHI SLEEP / CLOSELID", "SLEEP / CLOSELID DRAIN") }
+    public var kpiWithMacNAP: String { t("ƯỚC TÍNH KHI BẬT MACNAP", "ESTIMATED WITH MACNAP") }
 }
