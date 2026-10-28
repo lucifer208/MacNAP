@@ -5,6 +5,7 @@ public struct DashboardView: View {
     @ObservedObject var state: AppState
     public var onSelectDevice: ((String) -> Void)?
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var selectedBatterySample: BatteryChartHourlySample? = nil
 
     public init(state: AppState, onSelectDevice: ((String) -> Void)? = nil) {
         self.state = state
@@ -391,7 +392,9 @@ public struct DashboardView: View {
 
     private var appleStyleBatteryChartSection: some View {
         let L = state.l10n
-        let samples = state.batteryHistory24h
+        let isDaily = (state.batteryChartTimeRange == 1)
+        let samples = isDaily ? state.batteryHistory10Days : state.batteryHistory24h
+        let active = selectedBatterySample ?? samples.first(where: { isDaily ? ($0.hourIndex == 9) : ($0.hourIndex == 14) }) ?? samples.last
 
         return VStack(alignment: .leading, spacing: 14) {
             // 1. Time range picker & status summary
@@ -402,6 +405,9 @@ public struct DashboardView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 250)
+                .onChange(of: state.batteryChartTimeRange) { _, _ in
+                    selectedBatterySample = nil
+                }
 
                 Spacer()
 
@@ -418,6 +424,73 @@ public struct DashboardView: View {
                 }
             }
 
+            // Interactive Live Inspector Banner (Hover / Click Feedback)
+            if let act = active {
+                HStack(spacing: 12) {
+                    HStack(spacing: 5) {
+                        Image(systemName: isDaily ? "calendar" : "clock.fill")
+                            .foregroundStyle(.cyan)
+                            .font(.system(size: 11, weight: .bold))
+                        Text(act.detailedTitle)
+                            .font(.system(size: 11.5, weight: .bold))
+                    }
+
+                    Divider().frame(height: 12)
+
+                    HStack(spacing: 4) {
+                        Text(L.t("Mức pin:", "Battery:"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("\(act.batteryPercent)%")
+                            .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(act.batteryPercent < 20 ? .orange : (act.batteryPercent > 80 ? .green : .primary))
+                    }
+
+                    Divider().frame(height: 12)
+
+                    HStack(spacing: 4) {
+                        Image(systemName: act.isCharging ? "bolt.fill" : "battery.50")
+                            .font(.system(size: 10))
+                            .foregroundStyle(act.isCharging ? .green : .orange)
+                        Text(act.powerSourceText)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.primary)
+                    }
+
+                    Divider().frame(height: 12)
+
+                    HStack(spacing: 4) {
+                        Image(systemName: "display")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.blue)
+                        Text(L.t("Màn hình: \(act.screenOnDisplay)", "Screen: \(act.screenOnDisplay)"))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.primary)
+                    }
+
+                    if act.darkWakeCount > 0 {
+                        Divider().frame(height: 12)
+                        HStack(spacing: 4) {
+                            Image(systemName: "moon.zzz.fill")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.orange)
+                            Text("\(act.darkWakeCount) DarkWake")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.orange)
+                        }
+                    }
+
+                    Spacer()
+
+                    Text(L.t("Rê chuột hoặc nhấn để chọn mốc", "Hover or click bar to inspect"))
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(Color(nsColor: .controlBackgroundColor).opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
+            }
+
             Divider()
 
             // 2. Mức pin (Battery Level Chart)
@@ -426,7 +499,7 @@ public struct DashboardView: View {
                     Text(L.t("Mức pin", "Battery Level"))
                         .font(.system(size: 13, weight: .bold))
                     Spacer()
-                    Text(L.t("Hiển thị 24 mốc thời gian trong ngày", "24-hour timeline progression"))
+                    Text(isDaily ? L.t("Hiển thị 10 ngày qua", "Last 10 days progression") : L.t("Hiển thị 24 mốc thời gian trong ngày", "24-hour timeline progression"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -434,13 +507,13 @@ public struct DashboardView: View {
                 Chart {
                     ForEach(samples) { s in
                         BarMark(
-                            x: .value("Giờ", s.timeString),
+                            x: .value("Mốc", s.timeString),
                             y: .value("Mức pin (%)", s.batteryPercent),
-                            width: .fixed(7)
+                            width: .fixed(isDaily ? 14 : 7)
                         )
                         .foregroundStyle(
                             s.batteryPercent == 0 ? Color.clear :
-                            (s.batteryPercent < 20 ? Color.orange : Color(red: 0.20, green: 0.85, blue: 0.40))
+                            (s.id == active?.id ? Color.cyan : (s.batteryPercent < 20 ? Color.orange : Color(red: 0.20, green: 0.85, blue: 0.40)))
                         )
                         .cornerRadius(2)
                     }
@@ -468,22 +541,65 @@ public struct DashboardView: View {
                     }
                 }
                 .chartXAxis {
-                    AxisMarks(values: ["00:00", "03:00", "06:00", "09:00", "12:00", "15:00", "18:00", "21:00"]) { val in
-                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 4]))
-                            .foregroundStyle(Color.secondary.opacity(0.15))
-                        AxisValueLabel {
-                            if let str = val.as(String.self) {
-                                let display = str == "00:00" ? L.t("00 giờ", "00:00") : (str == "12:00" ? L.t("12 giờ", "12:00") : String(str.prefix(2)))
-                                Text(display)
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(.secondary)
+                    if isDaily {
+                        AxisMarks { val in
+                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 4]))
+                                .foregroundStyle(Color.secondary.opacity(0.15))
+                            AxisValueLabel {
+                                if let str = val.as(String.self) {
+                                    Text(str)
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    } else {
+                        AxisMarks(values: ["00:00", "03:00", "06:00", "09:00", "12:00", "15:00", "18:00", "21:00"]) { val in
+                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 4]))
+                                .foregroundStyle(Color.secondary.opacity(0.15))
+                            AxisValueLabel {
+                                if let str = val.as(String.self) {
+                                    let display = str == "00:00" ? L.t("00 giờ", "00:00") : (str == "12:00" ? L.t("12 giờ", "12:00") : String(str.prefix(2)))
+                                    Text(display)
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
                     }
                 }
+                .chartOverlay { proxy in
+                    GeometryReader { geo in
+                        Rectangle()
+                            .fill(Color.clear)
+                            .contentShape(Rectangle())
+                            .onContinuousHover { phase in
+                                switch phase {
+                                case .active(let location):
+                                    if let keyVal: String = proxy.value(atX: location.x) {
+                                        if let matched = samples.first(where: { $0.timeString == keyVal || $0.label == keyVal || $0.key == keyVal }) {
+                                            selectedBatterySample = matched
+                                        }
+                                    }
+                                case .ended:
+                                    break
+                                }
+                            }
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { val in
+                                        if let keyVal: String = proxy.value(atX: val.location.x) {
+                                            if let matched = samples.first(where: { $0.timeString == keyVal || $0.label == keyVal || $0.key == keyVal }) {
+                                                selectedBatterySample = matched
+                                            }
+                                        }
+                                    }
+                            )
+                    }
+                }
                 .frame(height: 110)
 
-                // Thanh trạng thái sạc (Charging track with lightning icons)
+                // Thanh trạng thái sạc
                 HStack(spacing: 0) {
                     ForEach(samples) { s in
                         ZStack {
@@ -491,7 +607,7 @@ public struct DashboardView: View {
                                 RoundedRectangle(cornerRadius: 1.5)
                                     .fill(Color(red: 0.20, green: 0.85, blue: 0.40))
                                     .frame(height: 3)
-                                if s.hourIndex % 4 == 0 {
+                                if isDaily || (s.hourIndex % 4 == 0) {
                                     Image(systemName: "bolt.fill")
                                         .font(.system(size: 8, weight: .bold))
                                         .foregroundStyle(Color(red: 0.20, green: 0.85, blue: 0.40))
@@ -508,20 +624,16 @@ public struct DashboardView: View {
                 .padding(.trailing, 45)
             }
 
-            // 3. Sử dụng khi màn hình bật & Thức ngầm DarkWake
+            // 3. Sử dụng khi màn hình bật
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text(L.t("Sử dụng khi màn hình bật & Thức ngầm DarkWake", "Screen-On & DarkWake Activity"))
+                    Text(L.t("Sử dụng khi màn hình bật", "Screen-On Usage Activity"))
                         .font(.system(size: 13, weight: .bold))
                     Spacer()
                     HStack(spacing: 12) {
                         HStack(spacing: 4) {
                             Circle().fill(Color(red: 0.18, green: 0.60, blue: 0.98)).frame(width: 7, height: 7)
-                            Text(L.t("Màn hình bật (phút)", "Screen-On (min)")).font(.caption2).foregroundStyle(.secondary)
-                        }
-                        HStack(spacing: 4) {
-                            Circle().fill(Color.orange).frame(width: 7, height: 7)
-                            Text(L.t("Thức ngầm DarkWake", "DarkWake Events")).font(.caption2).foregroundStyle(.secondary)
+                            Text(isDaily ? L.t("Thời gian bật (giờ)", "Screen-On (hours)") : L.t("Thời gian bật (phút)", "Screen-On (minutes)")).font(.caption2).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -529,39 +641,32 @@ public struct DashboardView: View {
                 Chart {
                     ForEach(samples) { s in
                         BarMark(
-                            x: .value("Giờ", s.timeString),
-                            y: .value("Phút", s.screenOnMinutes),
-                            width: .fixed(7)
+                            x: .value("Mốc", s.timeString),
+                            y: .value("Màn hình", isDaily ? (Double(s.screenOnMinutes) / 60.0) : Double(s.screenOnMinutes)),
+                            width: .fixed(isDaily ? 14 : 7)
                         )
-                        .foregroundStyle(Color(red: 0.18, green: 0.60, blue: 0.98))
+                        .foregroundStyle(
+                            s.id == active?.id ? Color.cyan : Color(red: 0.18, green: 0.60, blue: 0.98)
+                        )
                         .cornerRadius(2)
-
-                        if s.darkWakeCount > 0 {
-                            PointMark(
-                                x: .value("Giờ", s.timeString),
-                                y: .value("DarkWake", min(60, s.darkWakeCount * 12))
-                            )
-                            .foregroundStyle(Color.orange)
-                            .symbolSize(32)
-                        }
                     }
 
-                    RuleMark(y: .value("60ph", 60))
+                    RuleMark(y: .value("Max", isDaily ? 12 : 60))
                         .lineStyle(StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
                         .foregroundStyle(Color.secondary.opacity(0.3))
 
-                    RuleMark(y: .value("30ph", 30))
+                    RuleMark(y: .value("Mid", isDaily ? 6 : 30))
                         .lineStyle(StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
                         .foregroundStyle(Color.secondary.opacity(0.3))
                 }
-                .chartYScale(domain: 0...60)
+                .chartYScale(domain: 0...(isDaily ? 12 : 60))
                 .chartYAxis {
-                    AxisMarks(values: [0, 30, 60]) { val in
+                    AxisMarks(values: isDaily ? [0, 6, 12] : [0, 30, 60]) { val in
                         AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
                             .foregroundStyle(Color.secondary.opacity(0.2))
                         AxisValueLabel {
                             if let intVal = val.as(Int.self) {
-                                Text("\(intVal)ph")
+                                Text(isDaily ? "\(intVal)h" : "\(intVal)ph")
                                     .font(.system(size: 10, design: .monospaced))
                                     .foregroundStyle(.secondary)
                             }
@@ -569,23 +674,66 @@ public struct DashboardView: View {
                     }
                 }
                 .chartXAxis {
-                    AxisMarks(values: ["00:00", "03:00", "06:00", "09:00", "12:00", "15:00", "18:00", "21:00"]) { val in
-                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 4]))
-                            .foregroundStyle(Color.secondary.opacity(0.15))
-                        AxisValueLabel {
-                            if let str = val.as(String.self) {
-                                let display = str == "00:00" ? L.t("00 giờ", "00:00") : (str == "12:00" ? L.t("12 giờ", "12:00") : String(str.prefix(2)))
-                                Text(display)
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(.secondary)
+                    if isDaily {
+                        AxisMarks { val in
+                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 4]))
+                                .foregroundStyle(Color.secondary.opacity(0.15))
+                            AxisValueLabel {
+                                if let str = val.as(String.self) {
+                                    Text(str)
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
+                    } else {
+                        AxisMarks(values: ["00:00", "03:00", "06:00", "09:00", "12:00", "15:00", "18:00", "21:00"]) { val in
+                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 4]))
+                                .foregroundStyle(Color.secondary.opacity(0.15))
+                            AxisValueLabel {
+                                if let str = val.as(String.self) {
+                                    let display = str == "00:00" ? L.t("00 giờ", "00:00") : (str == "12:00" ? L.t("12 giờ", "12:00") : String(str.prefix(2)))
+                                    Text(display)
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
+                .chartOverlay { proxy in
+                    GeometryReader { geo in
+                        Rectangle()
+                            .fill(Color.clear)
+                            .contentShape(Rectangle())
+                            .onContinuousHover { phase in
+                                switch phase {
+                                case .active(let location):
+                                    if let keyVal: String = proxy.value(atX: location.x) {
+                                        if let matched = samples.first(where: { $0.timeString == keyVal || $0.label == keyVal || $0.key == keyVal }) {
+                                            selectedBatterySample = matched
+                                        }
+                                    }
+                                case .ended:
+                                    break
+                                }
+                            }
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { val in
+                                        if let keyVal: String = proxy.value(atX: val.location.x) {
+                                            if let matched = samples.first(where: { $0.timeString == keyVal || $0.label == keyVal || $0.key == keyVal }) {
+                                                selectedBatterySample = matched
+                                            }
+                                        }
+                                    }
+                            )
                     }
                 }
                 .frame(height: 100)
 
                 HStack {
-                    Text(DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none))
+                    Text(isDaily ? L.t("10 ngày gần nhất (tổng hợp từ pmset log)", "Last 10 days history (aggregated from pmset)") : DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     Spacer()

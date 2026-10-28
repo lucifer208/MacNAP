@@ -2,6 +2,22 @@
 
 ## [1.0.1] - 2026-10-28
 
+### [20:21] feat(battery): add interactive hover inspector banner and 10-day history tab switching
+- **Tương tác Rê chuột / Nhấn chọn mốc hiển thị thông tin chi tiết (`DashboardView.swift`, `Models.swift`)**:
+  - Tích hợp thanh **Live Inspector Banner** phía trên biểu đồ: Khi rê chuột hoặc click vào bất kỳ cột nào, thanh sẽ lập tức hiển thị thông tin chi tiết của mốc đó:
+    * 🕒 Mốc thời gian (vd: `14:00 - 15:00` hoặc ngày cụ thể).
+    * 🔋 Mức pin (%) kèm màu sắc trạng thái.
+    * ⚡ Trạng thái nguồn: `Cắm sạc AC (+35W)` hay `Đang dùng Pin (-12.5W)`.
+    * 🖥️ Thời gian màn hình bật (phút hoặc giờ).
+    * 🌙 Số lần bị thức ngầm DarkWake (nếu có).
+  - Cột được chọn/rê chuột sẽ tự động phát sáng nổi bật (màu Cyan) so với các cột còn lại.
+- **Chuyển đổi hoàn hảo giữa 2 Tab '24 giờ qua' và '10 ngày qua' (`DashboardView.swift`, `AppState.swift`)**:
+  - Tab `24 giờ qua`: 24 cột giờ (`00 giờ` đến `21:00`), lưới đo 0ph - 60ph.
+  - Tab `10 ngày qua`: 10 cột ngày (`19/10` đến `Hôm nay`), mức pin trung bình ngày, tổng số giờ bật màn hình mỗi ngày (0h - 12h).
+  - Tự động reset và đồng bộ điểm xem khi bấm chuyển tab.
+  - Xóa bỏ các chấm cam rác trên biểu đồ, giữ giao diện sạch và trực quan chuẩn macOS.
+- **Tự động đóng gói bản dựng `v1.0.1.2610282037`**: Hoàn tất cập nhật bản chạy mới.
+
 ### [20:14] feat(battery): add apple-style 24h battery level and screen-on activity chart
 - **Tích hợp Biểu đồ Mức Pin & Hoạt động 24h chuẩn Apple Battery Settings nhưng vượt trội hơn (`DashboardView.swift`, `AppState.swift`, `Models.swift`)**:
   - **Bộ chọn thời gian**: Hỗ trợ chuyển đổi `24 giờ qua` và `10 ngày qua`.

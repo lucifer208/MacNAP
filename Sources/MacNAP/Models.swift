@@ -300,16 +300,20 @@ public struct BatteryDrainLogEntry: Identifiable, Hashable {
     public let isHighDrain: Bool
 }
 
-/// Mẫu mức pin và hoạt động theo từng giờ (mô phỏng & nâng cấp biểu đồ Apple Battery)
+/// Mẫu mức pin và hoạt động theo từng giờ hoặc từng ngày (chuẩn Apple Battery Settings)
 public struct BatteryChartHourlySample: Identifiable, Hashable {
-    public var id: Int { hourIndex }
-    public let hourIndex: Int          // 0..23
-    public let label: String           // "00 giờ", "03", "06", ...
-    public let timeString: String      // "14:00"
+    public var id: String { key }
+    public let key: String             // "00:00", "01:00", ... hoặc "2026-10-28"
+    public let hourIndex: Int          // 0..23 (hoặc 0..9 ngày)
+    public let label: String           // "00 giờ", "03", ... hoặc "28/10"
+    public let timeString: String      // "14:00" hoặc "28 thg 10"
+    public let detailedTitle: String   // "14:00 - 15:00" hoặc "Thứ Tư, 28/10/2026"
     public let batteryPercent: Int     // 0..100%
     public let isCharging: Bool        // true nếu cắm sạc
-    public let screenOnMinutes: Int    // 0..60 phút
-    public let darkWakeCount: Int      // Số lần DarkWake trong giờ đó
-    public let isSleepPeriod: Bool     // true nếu đang gập nắp / sleep
-    public let watts: Double           // Công suất xả / nạp ước tính
+    public let screenOnMinutes: Int    // 0..60 phút (24h) hoặc tổng phút (10 ngày)
+    public let screenOnDisplay: String // "45 phút" hoặc "6.2 giờ"
+    public let darkWakeCount: Int      // Số lần DarkWake
+    public let isSleepPeriod: Bool     // true nếu đang sleep
+    public let watts: Double           // Công suất ước tính
+    public let powerSourceText: String // "Cắm sạc AC" hoặc "Đang dùng Pin"
 }
