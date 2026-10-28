@@ -86,45 +86,70 @@ public struct DashboardView: View {
 
     private var kpiGrid: some View {
         let lastSession = state.currentSleepSession
-        return HStack(spacing: 14) {
+        let chargingCardValue: String = {
+            if !state.externalConnected {
+                return "0.00 W (Dùng Pin)"
+            }
+            if state.chargingIntoBatteryWatts > 0.05 {
+                return String(format: "+%.2f W vào Pin", state.chargingIntoBatteryWatts)
+            }
+            return "0.00 W (Giữ Pin)"
+        }()
+
+        let chargingCardSubtitle: String = {
+            if !state.externalConnected {
+                return String(format: "Đang xả từ Pin: -%.2f W (%d mA)", abs(state.batteryNetWatts), abs(state.amperagemA))
+            }
+            if state.chargingIntoBatteryWatts > 0.05 {
+                return String(format: "Dòng nạp: +%d mA • Nguồn PD cấp %.1fW (Max %dW)", state.amperagemA, state.adapterWatts, state.adapterMaxWatts)
+            }
+            return String(format: "Chế độ Bypass tại %d%% • Sạc PD nuôi máy %.1fW (Max %dW)", state.batteryPercent, state.adapterWatts, state.adapterMaxWatts)
+        }()
+
+        return HStack(spacing: 12) {
             kpiCard(
-                title: "Tiêu thụ hệ thống (Out)",
+                title: "Công suất tiêu thụ thực (Out)",
                 value: String(format: "%.2f W", state.systemLoadWatts),
-                subtitle: String(format: "Core: %.2fW • Áp: %.2fV • Pin: %d%% (%d mAh)", state.cpuCoreWatts, state.voltageV, state.batteryPercent, state.remainingmAh),
-                icon: "bolt.horizontal.fill",
+                subtitle: String(format: "Core: %.2fW • Ngoại vi: %.2fW • Pin: %d%%", state.cpuCoreWatts, state.peripheralsTotalWatts, state.batteryPercent),
+                icon: "bolt.fill",
                 color: .orange
             )
 
             kpiCard(
-                title: "Công suất đang sạc vào (In)",
-                value: state.externalConnected
-                    ? String(format: "+%.2f W", state.adapterWatts)
-                    : "0.00 W (Dùng Pin)",
-                subtitle: state.externalConnected
-                    ? String(format: "Đang cắm sạc PD • Dư sạc: +%.2fW", max(0, state.adapterWatts - state.systemLoadWatts))
-                    : String(format: "Đang xả Pin: -%.2f W", state.batteryWatts),
+                title: "Đang sạc vào Pin (In)",
+                value: chargingCardValue,
+                subtitle: chargingCardSubtitle,
                 icon: state.externalConnected ? "powerplug.fill" : "battery.75percent",
-                color: .green
+                color: state.chargingIntoBatteryWatts > 0.05 ? .green : .cyan
             )
 
             kpiCard(
-                title: "Ngoại vi thực tế (Active vs Unmount)",
-                value: String(format: "%.2f W", state.peripheralsTotalWatts),
-                subtitle: String(format: "Khi Auto-Unmount hạ còn %.2f W (%d thiết bị)", state.peripheralsSleepWatts, state.peripherals.count),
-                icon: "cable.connector.horizontal",
-                color: .pink
-            )
-
-            kpiCard(
-                title: "Phiên ngủ đêm qua (Từ Log thật)",
+                title: "Đêm qua (Chưa bật App)",
                 value: lastSession != nil
                     ? "-\(lastSession!.dropPercent)% (\(lastSession!.startBattery)%→\(lastSession!.endBattery)%)"
                     : "-\(state.realLastNightDropPercent)%",
                 subtitle: lastSession != nil
-                    ? String(format: "%.1fh ngủ • %d lần DarkWake • TB %.2f W", lastSession!.durationHours, lastSession!.darkWakeCount, lastSession!.averageDrainWatts)
-                    : "Đọc trực tiếp từ pmset -g log",
+                    ? String(format: "%.1fh ngủ • %d DarkWake • Rò %.2f W", lastSession!.durationHours, lastSession!.darkWakeCount, lastSession!.averageDrainWatts)
+                    : "Đọc chuẩn từ pmset -g log",
                 icon: "bed.double.fill",
-                color: (lastSession?.dropPercent ?? 20) >= 15 ? .red : .cyan
+                color: .red
+            )
+
+            kpiCard(
+                title: "Dự đoán % Pin khi dùng MacNAP",
+                value: String(
+                    format: "Chỉ mất -%.1f%% → -%.1f%%",
+                    state.predictedDropPercentWithFullGuard,
+                    state.predictedDropPercentWithAutoUnmount
+                ),
+                subtitle: String(
+                    format: "Tiết kiệm +%d%% đến +%d%% pin mỗi đêm (Giữ lại ~%d%% sáng hôm sau)",
+                    max(1, state.realLastNightDropPercent - Int(round(state.predictedDropPercentWithAutoUnmount))),
+                    max(1, state.realLastNightDropPercent - Int(round(state.predictedDropPercentWithFullGuard))),
+                    max(0, 100 - Int(round(state.predictedDropPercentWithFullGuard)))
+                ),
+                icon: "sparkles",
+                color: .green
             )
         }
     }
@@ -177,27 +202,29 @@ public struct DashboardView: View {
             }
 
             if let session = state.currentSleepSession {
-                HStack(spacing: 16) {
+                HStack(spacing: 14) {
                     Text("Thời gian: **\(session.titleLabel)** (\(String(format: "%.1f giờ", session.durationHours)))")
-                    Text("Pin thực tế: **\(session.startBattery)% → \(session.endBattery)% (-20% chuẩn log)**".replacingOccurrences(of: "-20% chuẩn log", with: "-\(session.dropPercent)%"))
-                        .foregroundStyle(session.dropPercent >= 15 ? .red : .primary)
-                    Text("Công suất rò trung bình: **\(String(format: "%.2f W", session.averageDrainWatts))**")
-                        .foregroundStyle(.orange)
-                    Text("Số lần thức ngầm (DarkWake): **\(session.darkWakeCount) lần**")
-                        .foregroundStyle(.yellow)
+                    Text("Đêm qua (Không bật app): **\(session.startBattery)% → \(session.endBattery)% (-\(session.dropPercent)%)**")
+                        .foregroundStyle(.red)
+                    Text(String(format: "Dự đoán khi bật Auto-Unmount: **-%0.1f%%** (còn ~%d%%)", state.predictedDropPercentWithAutoUnmount, max(0, session.startBattery - Int(round(state.predictedDropPercentWithAutoUnmount)))))
+                        .foregroundStyle(.green)
+                    Text(String(format: "Khi bật Auto-Unmount + Tắt DarkWake: **-%0.1f%%** (còn ~%d%%)", state.predictedDropPercentWithFullGuard, max(0, session.startBattery - Int(round(state.predictedDropPercentWithFullGuard)))))
+                        .foregroundStyle(.mint)
                     Spacer()
-                    Text("💡 Nhấn vào từng vạch giờ trên biểu đồ để xem chi tiết nguyên nhân thức")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
                 }
                 .font(.caption)
 
                 let minBat = max(0, session.endBattery - 5)
                 let maxBat = min(100, session.startBattery + 2)
+                let totalSpan = max(1.0, session.endTime.timeIntervalSince(session.startTime))
 
                 Chart {
                     ForEach(session.events) { ev in
-                        // Đường % Pin thực tế theo ngày giờ
+                        let progress = max(0.0, min(1.0, ev.timestamp.timeIntervalSince(session.startTime) / totalSpan))
+                        let predictedAutoUnmountPct = Double(session.startBattery) - (progress * state.predictedDropPercentWithAutoUnmount)
+                        let predictedFullGuardPct = Double(session.startBattery) - (progress * state.predictedDropPercentWithFullGuard)
+
+                        // Đường % Pin thực tế theo ngày giờ (Chưa dùng app)
                         AreaMark(
                             x: .value("Giờ", ev.timestamp),
                             yStart: .value("Min", minBat),
@@ -205,7 +232,7 @@ public struct DashboardView: View {
                         )
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [.cyan.opacity(0.28), .cyan.opacity(0.02)],
+                                colors: [.cyan.opacity(0.24), .cyan.opacity(0.02)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -213,10 +240,29 @@ public struct DashboardView: View {
 
                         LineMark(
                             x: .value("Giờ", ev.timestamp),
-                            y: .value("Pin %", ev.batteryPercent)
+                            y: .value("Pin thực tế (%)", ev.batteryPercent),
+                            series: .value("Kịch bản", "Thực tế đêm qua")
                         )
                         .foregroundStyle(.cyan)
                         .lineStyle(StrokeStyle(lineWidth: 2.5))
+
+                        // Đường dự đoán % Pin khi bật MacNAP Auto-Unmount
+                        LineMark(
+                            x: .value("Giờ", ev.timestamp),
+                            y: .value("Dự đoán Auto-Unmount (%)", predictedAutoUnmountPct),
+                            series: .value("Kịch bản", "Bật Auto-Unmount")
+                        )
+                        .foregroundStyle(.green)
+                        .lineStyle(StrokeStyle(lineWidth: 2.2, dash: [6, 3]))
+
+                        // Đường dự đoán % Pin khi bật Auto-Unmount + Tắt DarkWake
+                        LineMark(
+                            x: .value("Giờ", ev.timestamp),
+                            y: .value("Dự đoán Full Guard (%)", predictedFullGuardPct),
+                            series: .value("Kịch bản", "Auto-Unmount + Tắt DarkWake")
+                        )
+                        .foregroundStyle(.mint)
+                        .lineStyle(StrokeStyle(lineWidth: 2.0, dash: [3, 3]))
 
                         // Các vạch DarkWake / Wake giống hệt Sleep Aid
                         if ev.kind != .sleep {
@@ -226,14 +272,14 @@ public struct DashboardView: View {
 
                             PointMark(
                                 x: .value("Giờ", ev.timestamp),
-                                y: .value("Pin %", ev.batteryPercent)
+                                y: .value("Pin thực tế (%)", ev.batteryPercent)
                             )
                             .symbolSize(selectedTimelineEventID == ev.id ? 110 : 55)
                             .foregroundStyle(ev.kind == .darkWake ? .orange : .red)
                         } else {
                             PointMark(
                                 x: .value("Giờ", ev.timestamp),
-                                y: .value("Pin %", ev.batteryPercent)
+                                y: .value("Pin thực tế (%)", ev.batteryPercent)
                             )
                             .symbolSize(selectedTimelineEventID == ev.id ? 90 : 30)
                             .foregroundStyle(.cyan)
@@ -242,14 +288,14 @@ public struct DashboardView: View {
                 }
                 .chartYScale(domain: minBat...maxBat)
                 .chartXAxis {
-                    AxisMarks(values: .automatic(desiredCount: 9)) { val in
+                    AxisMarks(values: .automatic(desiredCount: 9)) { _ in
                         AxisGridLine()
                         AxisTick()
                         AxisValueLabel(format: .dateTime.hour().minute())
                     }
                 }
                 .chartYAxisLabel("% Pin")
-                .frame(height: 175)
+                .frame(height: 185)
                 .chartOverlay { proxy in
                     GeometryReader { geo in
                         Rectangle()
@@ -268,6 +314,17 @@ public struct DashboardView: View {
                             }
                     }
                 }
+
+                HStack(spacing: 18) {
+                    legendDot(color: .cyan, label: "Thực tế đêm qua (-\(session.dropPercent)% • còn \(session.endBattery)%)")
+                    legendDot(color: .green, label: String(format: "Dự đoán khi bật Auto-Unmount ổ ngoài (-%.1f%% • còn ~%d%%)", state.predictedDropPercentWithAutoUnmount, max(0, session.startBattery - Int(round(state.predictedDropPercentWithAutoUnmount)))))
+                    legendDot(color: .mint, label: String(format: "Dự đoán khi bật Auto-Unmount + Tắt DarkWake (-%.1f%% • còn ~%d%%)", state.predictedDropPercentWithFullGuard, max(0, session.startBattery - Int(round(state.predictedDropPercentWithFullGuard)))))
+                    Spacer()
+                    Text("💡 Nhấn vào vạch cam trên biểu đồ để xem chi tiết nguyên nhân thức")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .font(.caption2)
 
                 // Thanh chọn nhanh các mốc DarkWake/Sleep hoặc chi tiết mốc vừa nhấn vào
                 if let ev = state.selectedTimelineEvent {
@@ -377,8 +434,8 @@ public struct DashboardView: View {
                 .frame(height: 185)
 
                 HStack(spacing: 16) {
-                    legendDot(color: .orange, label: String(format: "Tiêu thụ: %.2fW", state.systemLoadWatts))
-                    legendDot(color: .green, label: String(format: "Đang sạc vào: %.2fW", state.adapterWatts))
+                    legendDot(color: .orange, label: String(format: "Tiêu thụ thực: %.2fW", state.systemLoadWatts))
+                    legendDot(color: .green, label: String(format: "Sạc vào Pin: %.2fW (Nguồn PD: %.1fW)", state.chargingIntoBatteryWatts, state.adapterWatts))
                     legendDot(color: .pink, label: String(format: "Ngoại vi: %.2fW", state.peripheralsTotalWatts))
                 }
                 .font(.caption2)

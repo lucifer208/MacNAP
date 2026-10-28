@@ -6,8 +6,9 @@ public final class PowerTelemetryService {
 
     public func readBatteryAndSystemPower() -> (
         systemLoadW: Double,
-        batteryW: Double,
-        adapterW: Double,
+        batteryNetW: Double,
+        adapterInW: Double,
+        adapterMaxWatts: Int,
         voltageV: Double,
         amperagemA: Int,
         percent: Int,
@@ -19,20 +20,20 @@ public final class PowerTelemetryService {
         let matching = IOServiceMatching("AppleSmartBattery")
         var iterator: io_iterator_t = 0
         guard IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) == KERN_SUCCESS else {
-            return (0, 0, 0, 12.0, 0, 100, false, false, 0, 0)
+            return (0, 0, 0, 0, 12.0, 0, 100, false, false, 0, 0)
         }
         defer { IOObjectRelease(iterator) }
 
         let service = IOIteratorNext(iterator)
         guard service != 0 else {
-            return (0, 0, 0, 12.0, 0, 100, false, false, 0, 0)
+            return (0, 0, 0, 0, 12.0, 0, 100, false, false, 0, 0)
         }
         defer { IOObjectRelease(service) }
 
         var propsRef: Unmanaged<CFMutableDictionary>?
         guard IORegistryEntryCreateCFProperties(service, &propsRef, kCFAllocatorDefault, 0) == KERN_SUCCESS,
               let props = propsRef?.takeRetainedValue() as? [String: Any] else {
-            return (0, 0, 0, 12.0, 0, 100, false, false, 0, 0)
+            return (0, 0, 0, 0, 12.0, 0, 100, false, false, 0, 0)
         }
 
         let voltageMV = (props["Voltage"] as? Int) ?? 12000
@@ -42,24 +43,39 @@ public final class PowerTelemetryService {
         let isCharging = (props["IsCharging"] as? Bool) ?? false
         let externalConnected = (props["ExternalConnected"] as? Bool) ?? false
 
+        var adapterMaxWatts = 0
+        if let adapterDetails = props["AdapterDetails"] as? [String: Any] {
+            adapterMaxWatts = (adapterDetails["Watts"] as? Int) ?? 0
+        }
+
+        // Dòng nạp/xả thực tế vào viên pin: dương (+W) = đang nạp vào pin, âm (-W) = đang xả pin, 0W = giữ pin (Bypass)
+        var batteryNetW = (Double(amperage) * voltageV) / 1000.0
         var systemLoadW = 0.0
-        var adapterW = 0.0
-        var batteryW = abs(Double(amperage) * voltageV / 1000.0)
+        var adapterInW = 0.0
 
         if let telemetry = props["PowerTelemetryData"] as? [String: Any] {
-            if let sysLoadMW = telemetry["SystemLoad"] as? Int {
+            // SystemEnergyConsumed (mW) là công suất tiêu thụ thực của máy (tương đương iStat Menus / Stats ~ 6-12W)
+            let energyConsumedMW = (telemetry["SystemEnergyConsumed"] as? Int) ?? 0
+            let sysLoadMW = (telemetry["SystemLoad"] as? Int) ?? 0
+            let sysPowerInMW = (telemetry["SystemPowerIn"] as? Int) ?? 0
+
+            if energyConsumedMW > 0 {
+                systemLoadW = Double(energyConsumedMW) / 1000.0
+            } else if sysLoadMW > 0 {
                 systemLoadW = Double(sysLoadMW) / 1000.0
             }
-            if let sysPowerInMW = telemetry["SystemPowerIn"] as? Int {
-                adapterW = Double(sysPowerInMW) / 1000.0
+
+            if sysPowerInMW > 0 {
+                adapterInW = Double(sysPowerInMW) / 1000.0
             }
-            if let batPowerMW = telemetry["BatteryPower"] as? Int, batPowerMW != 0 {
-                batteryW = abs(Double(batPowerMW)) / 1000.0
+
+            if let batPowerMW = telemetry["BatteryPower"] as? Int, batPowerMW != 0, batteryNetW == 0 {
+                batteryNetW = Double(batPowerMW) / 1000.0
             }
         }
 
         if systemLoadW == 0 {
-            systemLoadW = batteryW > 0 ? batteryW : adapterW
+            systemLoadW = abs(batteryNetW) > 0 ? abs(batteryNetW) : adapterInW
         }
 
         var remainingmAh = 0
@@ -71,8 +87,9 @@ public final class PowerTelemetryService {
 
         return (
             systemLoadW: systemLoadW,
-            batteryW: batteryW,
-            adapterW: adapterW,
+            batteryNetW: batteryNetW,
+            adapterInW: adapterInW,
+            adapterMaxWatts: adapterMaxWatts,
             voltageV: voltageV,
             amperagemA: amperage,
             percent: percent,

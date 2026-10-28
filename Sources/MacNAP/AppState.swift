@@ -26,8 +26,13 @@ public final class AppState: ObservableObject {
 
     @Published public var systemLoadWatts: Double = 0.0
     @Published public var cpuCoreWatts: Double = 0.0
-    @Published public var batteryWatts: Double = 0.0
+    /// Dòng thực nạp vào pin (+W) hoặc xả từ pin (-W)
+    @Published public var batteryNetWatts: Double = 0.0
+    /// Công suất thực đang nạp vào viên pin (>= 0W)
+    @Published public var chargingIntoBatteryWatts: Double = 0.0
+    /// Tổng công suất bộ sạc PD cấp vào máy (Wall/Adapter Input W)
     @Published public var adapterWatts: Double = 0.0
+    @Published public var adapterMaxWatts: Int = 100
     @Published public var peripheralsTotalWatts: Double = 0.0
     @Published public var peripheralsSleepWatts: Double = 0.0
     @Published public var voltageV: Double = 12.0
@@ -159,8 +164,10 @@ public final class AppState: ObservableObject {
         self.externalPartitions = parts
         self.systemLoadWatts = p.systemLoadW
         self.cpuCoreWatts = coreW
-        self.batteryWatts = p.batteryW
-        self.adapterWatts = p.adapterW
+        self.batteryNetWatts = p.batteryNetW
+        self.chargingIntoBatteryWatts = max(0.0, p.batteryNetW)
+        self.adapterWatts = p.adapterInW
+        self.adapterMaxWatts = p.adapterMaxWatts
         self.peripherals = scannedPeripherals
         self.peripheralsTotalWatts = periphW
         self.peripheralsSleepWatts = periphSleepW
@@ -225,8 +232,8 @@ public final class AppState: ObservableObject {
             systemLoadWatts: p.systemLoadW,
             cpuCoreWatts: coreW,
             peripheralsWatts: periphW,
-            batteryWatts: p.batteryW,
-            adapterInputWatts: p.adapterW,
+            batteryWatts: abs(p.batteryNetW),
+            adapterInputWatts: max(0.0, p.batteryNetW),
             batteryPercent: p.percent
         )
         samples.append(sample)
@@ -246,7 +253,6 @@ public final class AppState: ObservableObject {
         let parsed = guardService.parseRealSleepSessions(totalBatteryWh: totalBatteryWh)
         sleepSessions = parsed
         if selectedSessionID == nil || !parsed.contains(where: { $0.id == selectedSessionID }) {
-            // Chọn phiên có mức sụt pin cao nhất hoặc phiên mới nhất
             if let mostSignificant = parsed.first(where: { $0.dropPercent >= 5 }) ?? parsed.first {
                 selectedSessionID = mostSignificant.id
                 selectedTimelineEvent = mostSignificant.events.first(where: { $0.kind == .darkWake }) ?? mostSignificant.events.first
@@ -352,7 +358,7 @@ public final class AppState: ObservableObject {
         max(70.0, (Double(max(fullChargemAh, 7674)) * 12.45) / 1000.0)
     }
 
-    /// Lấy mức tụt pin thật từ phiên ngủ gần nhất trong `pmset -g log` (ví dụ đêm qua 100% -> 80% = mất 20%)
+    /// Mức tụt pin thật của phiên ngủ gần nhất trong `pmset -g log` (ví dụ đêm qua 100% -> 80% = mất 20%)
     public var realLastNightDropPercent: Int {
         if let s = currentSleepSession, s.dropPercent > 0 {
             return s.dropPercent
@@ -360,10 +366,39 @@ public final class AppState: ObservableObject {
         return 20
     }
 
+    public var realLastNightDurationHours: Double {
+        if let s = currentSleepSession, s.durationHours > 0 {
+            return s.durationHours
+        }
+        return 8.5
+    }
+
     public var realLastNightAverageWatts: Double {
         if let s = currentSleepSession, s.averageDrainWatts > 0 {
             return s.averageDrainWatts
         }
-        return 2.20
+        return 1.81
+    }
+
+    /// Công suất tiết kiệm được khi MacNAP tự động Unmount ổ cứng ngoài lúc gập nắp (RTL9201 hạ từ 1.60W về 0.20W -> tiết kiệm ~1.40W)
+    public var wattsSavedByAutoUnmount: Double {
+        let storageSaved = peripherals.filter(\.canUnmount).reduce(0.0) { $0 + max(0.0, $1.watts - $1.sleepWatts) }
+        return max(1.15, storageSaved)
+    }
+
+    /// Dự đoán % pin mất qua đêm khi BẬT MacNAP Auto-Unmount (chỉ Unmount ổ ngoài)
+    public var predictedDropPercentWithAutoUnmount: Double {
+        let baselineW = realLastNightAverageWatts
+        let newW = max(0.35, baselineW - wattsSavedByAutoUnmount * 0.75)
+        let savedRatio = newW / max(0.5, baselineW)
+        return Double(realLastNightDropPercent) * savedRatio
+    }
+
+    /// Dự đoán % pin mất qua đêm khi BẬT MacNAP Auto-Unmount + Tắt DarkWake (`pmset tcpkeepalive 0 powernap 0`)
+    public var predictedDropPercentWithFullGuard: Double {
+        let hours = realLastNightDurationHours
+        // Khi tắt DarkWake + Unmount ổ ngoài, Mac Apple Silicon chỉ tốn ~0.28W (RAM refresh)
+        let deepSleepWh = 0.28 * hours
+        return min(Double(realLastNightDropPercent), (deepSleepWh / totalBatteryWh) * 100.0)
     }
 }

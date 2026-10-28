@@ -34,11 +34,15 @@ struct MacNAPApp: App {
 
                 Divider()
 
-                Text(String(format: "⚡️ Tiêu thụ (Out): %.2f W", state.systemLoadWatts))
-                Text(String(format: "🔌 Đang sạc vào (In): %.2f W", state.externalConnected ? state.adapterWatts : 0.0))
+                Text(String(format: "⚡️ Tiêu thụ thực (Out): %.2f W", state.systemLoadWatts))
+                Text(
+                    state.externalConnected
+                        ? String(format: "🔌 Đang sạc vào Pin (In): +%.2f W (PD cấp %.1fW)", state.chargingIntoBatteryWatts, state.adapterWatts)
+                        : String(format: "🔋 Đang xả từ Pin: -%.2f W", abs(state.batteryNetWatts))
+                )
                 Text(String(format: "🖨️ Ngoại vi (Active): %.2f W (Standby: %.2f W)", state.peripheralsTotalWatts, state.peripheralsSleepWatts))
                 if let s = state.currentSleepSession {
-                    Text(String(format: "🌙 Đêm qua (%@): -%d%% (%d DarkWake • TB %.2fW)", s.titleLabel, s.dropPercent, s.darkWakeCount, s.averageDrainWatts))
+                    Text(String(format: "🌙 Đêm qua: -%d%% • Dự đoán dùng App: -%.1f%% → -%.1f%%", s.dropPercent, state.predictedDropPercentWithFullGuard, state.predictedDropPercentWithAutoUnmount))
                 }
 
                 Divider()
@@ -96,7 +100,7 @@ struct MacNAPApp: App {
                 String(
                     format: "⚡️%.1fW 🔌%.1fW",
                     state.systemLoadWatts,
-                    state.externalConnected ? state.adapterWatts : 0.0
+                    state.externalConnected ? state.chargingIntoBatteryWatts : 0.0
                 )
             )
             .font(.system(size: 12, weight: .semibold, design: .monospaced))

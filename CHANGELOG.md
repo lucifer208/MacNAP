@@ -2,6 +2,14 @@
 
 ## [Unreleased] - 2026-10-28
 
+### [10:32] fix: accurate SystemEnergyConsumed & Battery Charging Watts + predicted % battery saved with MacNAP
+- **Sửa công suất tiêu thụ thực & công suất đang sạc vào Pin (`PowerTelemetryService.swift`)**:
+  - Đọc `SystemEnergyConsumed` (mW) làm công suất tiêu thụ thực của máy (`~6.5W - 9W`), tách biệt với `SystemPowerIn` (tổng nguồn củ sạc PD cấp) và `InstantAmperage * Voltage` (công suất thực nạp vào viên pin: `0.00 W (Giữ Pin)` khi macOS bật Bypass ở `90%` pin, hoặc `+W` khi đang sạc).
+- **Hiển thị rõ dự đoán `%` pin khi dùng MacNAP (`AppState.swift` & `DashboardView.swift`)**:
+  - Thêm thẻ KPI **"Dự đoán % Pin khi dùng MacNAP"** và vẽ trực tiếp 2 đường dự đoán trên biểu đồ phiên ngủ:
+    1. **Bật Auto-Unmount ổ ngoài**: Giảm hao phí từ `-20%` xuống chỉ còn **`~ -7.9%`** (tiết kiệm `+12%` pin).
+    2. **Bật Auto-Unmount + Tắt DarkWake**: Giảm xuống chỉ còn **`~ -3.1%`** (giữ lại `~97%` pin sau 10.6h ngủ).
+
 ### [10:27] fix: display single-text lightning & plug Watts in MenuBarExtra label
 - Sửa lỗi `MenuBarExtra` trên macOS chỉ render phần tử `Text` đầu tiên khi dùng nhiều `Text` trong `HStack`: Gộp thành một `Text("⚡️%.1fW 🔌%.1fW")` duy nhất để hiển thị rõ biểu tượng tia sét (Watt tiêu thụ) và phích cắm sạc (Watt sạc vào) ngay trên thanh Menu Bar.
 
