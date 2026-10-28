@@ -36,3 +36,4 @@ jobs:
             releases/latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
