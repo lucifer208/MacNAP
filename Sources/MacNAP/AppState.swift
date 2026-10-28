@@ -356,20 +356,20 @@ public final class AppState: ObservableObject {
         Task {
             let result = await Task.detached(priority: .utility) {
                 let p = telemetryRef.readBatteryAndSystemPower()
-                let lidClosed = telemetryRef.isClamshellClosed()
+                let lidSleep = telemetryRef.isClamshellSleepActive()
                 let parts = shouldScanDisksAndAssertions ? guardRef.scanExternalPartitions() : cachedParts
                 let scannedPeripherals = telemetryRef.scanPeripherals(partitions: parts)
                 let newAssertions = shouldScanDisksAndAssertions ? guardRef.scanSleepAssertions() : cachedAssertions
-                return (p, lidClosed, parts, scannedPeripherals, newAssertions)
+                return (p, lidSleep, parts, scannedPeripherals, newAssertions)
             }.value
 
-            let (p, lidClosed, parts, scannedPeripherals, newAssertions) = result
+            let (p, lidSleep, parts, scannedPeripherals, newAssertions) = result
             self.isRefreshingTelemetry = false
 
-            // Đồng bộ chuẩn Sleep/CloseLid & Wake/OpenLid qua cả IOKit Clamshell lẫn NSWorkspace
-            if lidClosed && !self.wasLidClosedOrSleeping {
+            // Đồng bộ chuẩn Sleep/CloseLid & Wake/OpenLid (bỏ qua nếu đang dùng màn hình rời Clamshell Desktop Mode)
+            if lidSleep && !self.wasLidClosedOrSleeping {
                 self.handleUnifiedSleepCloseLid(trigger: "CloseLid / Sleep")
-            } else if !lidClosed && self.wasLidClosedOrSleeping {
+            } else if !lidSleep && self.wasLidClosedOrSleeping {
                 self.handleUnifiedWakeOpenLid(trigger: "OpenLid / Wake")
             }
 

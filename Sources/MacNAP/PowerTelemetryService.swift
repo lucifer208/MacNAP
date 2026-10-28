@@ -4,20 +4,27 @@ import IOKit
 public final class PowerTelemetryService {
     public init() {}
 
-    /// Kiểm tra trạng thái gập nắp vật lý (`AppleClamshellState`) từ `IOPMrootDomain`
-    public func isClamshellClosed() -> Bool {
+    /// Kiểm tra trạng thái gập nắp gây ngủ (`AppleClamshellState == true && AppleClamshellCausesSleep == true`) từ `IOPMrootDomain`
+    /// Nếu đang cắm màn hình rời (Clamshell Mode: `AppleClamshellCausesSleep == false`) thì máy vẫn đang thức, tuyệt đối không tự unmount!
+    public func isClamshellSleepActive() -> Bool {
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPMrootDomain"))
         guard service != 0 else { return false }
         defer { IOObjectRelease(service) }
-        if let cfProp = IORegistryEntryCreateCFProperty(
+        let closed = (IORegistryEntryCreateCFProperty(
             service,
             "AppleClamshellState" as CFString,
             kCFAllocatorDefault,
             0
-        )?.takeRetainedValue() as? Bool {
-            return cfProp
-        }
-        return false
+        )?.takeRetainedValue() as? Bool) ?? false
+
+        let causesSleep = (IORegistryEntryCreateCFProperty(
+            service,
+            "AppleClamshellCausesSleep" as CFString,
+            kCFAllocatorDefault,
+            0
+        )?.takeRetainedValue() as? Bool) ?? false
+
+        return closed && causesSleep
     }
 
     private func readSysctlString(_ name: String) -> String {
