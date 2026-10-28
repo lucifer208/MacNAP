@@ -2,6 +2,22 @@
 
 ## [1.0.1] - 2026-10-28
 
+### [20:33] feat(charts): overhaul visual clarity, legends, and diagnostic hints across all dashboard charts
+- **Tối ưu trực quan hóa toàn bộ biểu đồ, cực kỳ dễ hiểu (`DashboardView.swift`)**:
+  - **Biểu đồ Mức pin (%)**:
+    * Phân biệt màu sắc rõ ràng: Cột xanh lá = Đang cắm sạc AC, Cột xanh Cyan = Đang dùng Pin, Cột màu cam = Pin yếu (<20%), Cột vàng phát sáng = Mốc đang được chọn/rê chuột.
+    * Bổ sung chú thích màu sắc trực tiếp (Legend: `🟩 Cắm sạc AC • 🟦 Dùng Pin • 🟧 Pin yếu`).
+    * Dải chỉ báo cắm sạc bên dưới: Thanh xanh lục liền mạch chuẩn xác từng khung giờ cắm sạc kèm nhãn `Cắm sạc AC`.
+  - **Biểu đồ Màn hình bật & Thức ngầm DarkWake**:
+    * Cột màu xanh dương: Đo thời gian bạn trực tiếp ngồi mở máy làm việc.
+    * Cột màu cam nổi bật: Cảnh báo những giờ máy bị đánh thức trộm (DarkWake) lúc bạn đang ngủ / gập nắp.
+    * Chú thích màu sắc rõ ràng: `🟦 Bạn dùng máy (Màn hình sáng) • 🟧 Máy thức trộm (DarkWake khi ngủ)`.
+  - **Thanh Live Inspector Box thông minh**:
+    * Hiển thị câu phân tích chẩn đoán tự động (ví dụ: *⚡ Đang cắm sạc*, *⚠️ Thức ngầm DarkWake do USB*, *🔴 Cảnh báo pin yếu*, *🟢 Hoạt động ổn định*).
+  - **Biểu đồ Phân tích Sleep**: Bổ sung chú thích 4 màu trực quan (`🟦 Thực tế`, `🟩 Dự đoán Auto-Unmount`, `✨ Dự đoán Toàn diện`, `🟧 Vạch cam thức ngầm DarkWake`).
+  - **Biểu đồ Công suất Ngoại vi**: Bổ sung đường chuẩn Standby sau Unmount khớp với chú thích.
+- **Tự động đóng gói bản dựng `v1.0.1.2610282029`**: Cập nhật file nhị phân, DMG và ZIP.
+
 ### [20:21] feat(battery): add interactive hover inspector banner and 10-day history tab switching
 - **Tương tác Rê chuột / Nhấn chọn mốc hiển thị thông tin chi tiết (`DashboardView.swift`, `Models.swift`)**:
   - Tích hợp thanh **Live Inspector Banner** phía trên biểu đồ: Khi rê chuột hoặc click vào bất kỳ cột nào, thanh sẽ lập tức hiển thị thông tin chi tiết của mốc đó:

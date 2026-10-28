@@ -426,69 +426,89 @@ public struct DashboardView: View {
 
             // Interactive Live Inspector Banner (Hover / Click Feedback)
             if let act = active {
-                HStack(spacing: 12) {
-                    HStack(spacing: 5) {
-                        Image(systemName: isDaily ? "calendar" : "clock.fill")
-                            .foregroundStyle(.cyan)
-                            .font(.system(size: 11, weight: .bold))
-                        Text(act.detailedTitle)
-                            .font(.system(size: 11.5, weight: .bold))
+                let diagnosticTip: String = {
+                    if act.isCharging {
+                        return L.t("⚡ Đang cắm sạc: Máy được cấp nguồn AC liên tục, linh kiện chạy mát và pin được bảo vệ.",
+                                   "⚡ On AC Power: Running directly on charger, preserving battery health.")
+                    } else if act.darkWakeCount > 0 {
+                        return L.t("⚠️ Thức ngầm DarkWake (\(act.darkWakeCount) lần): Ngoại vi USB hoặc mạng ngầm đã tự đánh thức máy khi gập nắp gây tốn pin.",
+                                   "⚠️ DarkWake detected (\(act.darkWakeCount) times): USB peripherals or network woke machine during sleep.")
+                    } else if act.batteryPercent < 20 {
+                        return L.t("🔴 Pin yếu (<20%): Nên cắm sạc hoặc bật Low Power Mode để tránh cạn kiệt pin.",
+                                   "🔴 Low Battery (<20%): Plug in charger or enable Low Power Mode.")
+                    } else {
+                        return L.t("🟢 Dùng pin bình thường: Máy đang xả điện từ khối pin phục vụ tác vụ của bạn.",
+                                   "🟢 Normal Battery Discharge: Powering active tasks from battery.")
                     }
+                }()
 
-                    Divider().frame(height: 12)
-
-                    HStack(spacing: 4) {
-                        Text(L.t("Mức pin:", "Battery:"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text("\(act.batteryPercent)%")
-                            .font(.system(size: 11.5, weight: .bold, design: .rounded))
-                            .foregroundStyle(act.batteryPercent < 20 ? .orange : (act.batteryPercent > 80 ? .green : .primary))
-                    }
-
-                    Divider().frame(height: 12)
-
-                    HStack(spacing: 4) {
-                        Image(systemName: act.isCharging ? "bolt.fill" : "battery.50")
-                            .font(.system(size: 10))
-                            .foregroundStyle(act.isCharging ? .green : .orange)
-                        Text(act.powerSourceText)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.primary)
-                    }
-
-                    Divider().frame(height: 12)
-
-                    HStack(spacing: 4) {
-                        Image(systemName: "display")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.blue)
-                        Text(L.t("Màn hình: \(act.screenOnDisplay)", "Screen: \(act.screenOnDisplay)"))
-                            .font(.system(size: 11))
-                            .foregroundStyle(.primary)
-                    }
-
-                    if act.darkWakeCount > 0 {
-                        Divider().frame(height: 12)
-                        HStack(spacing: 4) {
-                            Image(systemName: "moon.zzz.fill")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.orange)
-                            Text("\(act.darkWakeCount) DarkWake")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 12) {
+                        HStack(spacing: 6) {
+                            Image(systemName: isDaily ? "calendar" : "clock.fill")
+                                .foregroundStyle(.cyan)
+                                .font(.system(size: 11, weight: .bold))
+                            Text(act.detailedTitle)
+                                .font(.system(size: 12, weight: .bold))
                         }
+
+                        Divider().frame(height: 12)
+
+                        HStack(spacing: 4) {
+                            Text(L.t("Mức pin:", "Battery:"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("\(act.batteryPercent)%")
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .foregroundStyle(act.batteryPercent < 20 ? .orange : (act.isCharging ? .green : .cyan))
+                        }
+
+                        Divider().frame(height: 12)
+
+                        HStack(spacing: 4) {
+                            Image(systemName: act.isCharging ? "bolt.fill" : "battery.50")
+                                .font(.system(size: 10))
+                                .foregroundStyle(act.isCharging ? .green : .orange)
+                            Text(act.powerSourceText)
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+
+                        Divider().frame(height: 12)
+
+                        HStack(spacing: 4) {
+                            Image(systemName: "display")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.blue)
+                            Text(L.t("Màn hình: \(act.screenOnDisplay)", "Screen: \(act.screenOnDisplay)"))
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+
+                        if act.darkWakeCount > 0 {
+                            Divider().frame(height: 12)
+                            HStack(spacing: 4) {
+                                Image(systemName: "moon.zzz.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.orange)
+                                Text("\(act.darkWakeCount) DarkWake")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.orange)
+                            }
+                        }
+
+                        Spacer()
+
+                        Text(L.t("Rê chuột hoặc nhấn để chọn mốc", "Hover or click bar to inspect"))
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
                     }
 
-                    Spacer()
-
-                    Text(L.t("Rê chuột hoặc nhấn để chọn mốc", "Hover or click bar to inspect"))
-                        .font(.system(size: 10))
+                    Text(diagnosticTip)
+                        .font(.system(size: 10.5))
                         .foregroundStyle(.secondary)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .background(Color(nsColor: .controlBackgroundColor).opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(nsColor: .controlBackgroundColor).opacity(0.7), in: RoundedRectangle(cornerRadius: 8))
             }
 
             Divider()
@@ -496,12 +516,22 @@ public struct DashboardView: View {
             // 2. Mức pin (Battery Level Chart)
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text(L.t("Mức pin", "Battery Level"))
-                        .font(.system(size: 13, weight: .bold))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L.t("1. Mức pin (%) theo thời gian", "1. Battery Level (%) over Time"))
+                            .font(.system(size: 13, weight: .bold))
+                        Text(isDaily ? L.t("Mức pin trung bình và trạng thái sạc trong 10 ngày qua", "Average battery level and charging over 10 days") : L.t("Cột xanh lá = Đang cắm sạc • Cột xanh Cyan = Đang dùng Pin", "Green = On AC Charging • Cyan = On Battery"))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
                     Spacer()
-                    Text(isDaily ? L.t("Hiển thị 10 ngày qua", "Last 10 days progression") : L.t("Hiển thị 24 mốc thời gian trong ngày", "24-hour timeline progression"))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+
+                    HStack(spacing: 12) {
+                        legendDot(color: Color(red: 0.20, green: 0.85, blue: 0.40), label: L.t("Cắm sạc AC", "Charging"))
+                        legendDot(color: .cyan, label: L.t("Dùng Pin", "On Battery"))
+                        legendDot(color: .orange, label: L.t("Pin yếu (<20%)", "Low (<20%)"))
+                    }
+                    .font(.caption2)
                 }
 
                 Chart {
@@ -513,7 +543,7 @@ public struct DashboardView: View {
                         )
                         .foregroundStyle(
                             s.batteryPercent == 0 ? Color.clear :
-                            (s.id == active?.id ? Color.cyan : (s.batteryPercent < 20 ? Color.orange : Color(red: 0.20, green: 0.85, blue: 0.40)))
+                            (s.id == active?.id ? Color.yellow : (s.batteryPercent < 20 ? Color.orange : (s.isCharging ? Color(red: 0.20, green: 0.85, blue: 0.40) : Color.cyan)))
                         )
                         .cornerRadius(2)
                     }
@@ -599,54 +629,65 @@ public struct DashboardView: View {
                 }
                 .frame(height: 110)
 
-                // Thanh trạng thái sạc
-                HStack(spacing: 0) {
-                    ForEach(samples) { s in
-                        ZStack {
+                // Dải thời gian cắm sạc
+                HStack(spacing: 8) {
+                    Label(L.t("Cắm sạc AC", "AC Charging"), systemImage: "bolt.fill")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(Color(red: 0.20, green: 0.85, blue: 0.40))
+                        .frame(width: 80, alignment: .leading)
+
+                    HStack(spacing: 3) {
+                        ForEach(samples) { s in
                             if s.isCharging {
-                                RoundedRectangle(cornerRadius: 1.5)
+                                RoundedRectangle(cornerRadius: 2)
                                     .fill(Color(red: 0.20, green: 0.85, blue: 0.40))
-                                    .frame(height: 3)
-                                if isDaily || (s.hourIndex % 4 == 0) {
-                                    Image(systemName: "bolt.fill")
-                                        .font(.system(size: 8, weight: .bold))
-                                        .foregroundStyle(Color(red: 0.20, green: 0.85, blue: 0.40))
-                                }
+                                    .frame(height: 5)
                             } else {
-                                Rectangle()
-                                    .fill(Color.clear)
-                                    .frame(height: 3)
+                                RoundedRectangle(cornerRadius: 1)
+                                    .fill(Color.secondary.opacity(0.12))
+                                    .frame(height: 2)
                             }
                         }
-                        .frame(maxWidth: .infinity)
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.trailing, 40)
                 }
-                .padding(.trailing, 45)
+                .padding(.top, 2)
             }
 
             // 3. Sử dụng khi màn hình bật
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text(L.t("Sử dụng khi màn hình bật", "Screen-On Usage Activity"))
-                        .font(.system(size: 13, weight: .bold))
-                    Spacer()
-                    HStack(spacing: 12) {
-                        HStack(spacing: 4) {
-                            Circle().fill(Color(red: 0.18, green: 0.60, blue: 0.98)).frame(width: 7, height: 7)
-                            Text(isDaily ? L.t("Thời gian bật (giờ)", "Screen-On (hours)") : L.t("Thời gian bật (phút)", "Screen-On (minutes)")).font(.caption2).foregroundStyle(.secondary)
-                        }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L.t("2. Thời gian sử dụng màn hình & Thức ngầm DarkWake", "2. Screen-On Usage & DarkWake Activity"))
+                            .font(.system(size: 13, weight: .bold))
+                        Text(isDaily
+                             ? L.t("Số giờ bạn mở máy làm việc mỗi ngày (tối đa 12h/ngày)", "Hours of active screen-on usage per day (max 12h/day)")
+                             : L.t("Cột xanh dương = Bạn đang dùng máy • Cột cam = Máy tự thức dậy khi ngủ", "Blue = You working • Orange = Background DarkWake"))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
+
+                    Spacer()
+
+                    HStack(spacing: 12) {
+                        legendDot(color: Color(red: 0.18, green: 0.60, blue: 0.98), label: L.t("Bạn đang dùng máy (Màn hình sáng)", "Screen-On Active"))
+                        legendDot(color: .orange, label: L.t("Máy thức trộm (DarkWake khi ngủ)", "DarkWake when Sleeping"))
+                    }
+                    .font(.caption2)
                 }
 
                 Chart {
                     ForEach(samples) { s in
+                        let isDarkWakeDominated = (s.darkWakeCount > 0 && s.screenOnMinutes < 20)
                         BarMark(
                             x: .value("Mốc", s.timeString),
                             y: .value("Màn hình", isDaily ? (Double(s.screenOnMinutes) / 60.0) : Double(s.screenOnMinutes)),
                             width: .fixed(isDaily ? 14 : 7)
                         )
                         .foregroundStyle(
-                            s.id == active?.id ? Color.cyan : Color(red: 0.18, green: 0.60, blue: 0.98)
+                            s.id == active?.id ? Color.yellow :
+                            (isDarkWakeDominated ? Color.orange : Color(red: 0.18, green: 0.60, blue: 0.98))
                         )
                         .cornerRadius(2)
                     }
@@ -1621,6 +1662,16 @@ public struct DashboardView: View {
                     }
                 }
 
+                // Chú thích trực quan cho Biểu đồ Sleep
+                HStack(spacing: 16) {
+                    legendDot(color: .cyan, label: L.t("Thực tế (% Pin hao hụt)", "Actual Battery Drain"))
+                    legendDot(color: .green, label: L.t("Dự đoán khi bật Auto-Unmount", "Predicted with Auto-Unmount"))
+                    legendDot(color: .mint, label: L.t("Bảo vệ Toàn diện (Full Guard)", "Full Guard Savings"))
+                    legendDot(color: .orange, label: L.t("Vạch cam đáy: Thức ngầm DarkWake", "Orange Ticks: DarkWake"))
+                }
+                .font(.caption2)
+                .padding(.horizontal, 4)
+
                 // Row 4: Clean Structured Event Inspector Bar
                 if let ev = state.selectedTimelineEvent {
                     let curIndex = (session.events.firstIndex(where: { $0.id == ev.id }) ?? 0) + 1
@@ -1960,6 +2011,10 @@ public struct DashboardView: View {
                     )
                     .foregroundStyle(.pink)
                     .lineStyle(StrokeStyle(lineWidth: 2.5))
+
+                    RuleMark(y: .value("Standby", state.peripheralsSleepWatts))
+                        .foregroundStyle(.green.opacity(0.85))
+                        .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
                 }
             }
             .chartYAxisLabel("Watts (W)")
