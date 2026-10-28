@@ -16,25 +16,31 @@ public struct SettingsView: View {
                 }
                 .tag(0)
 
+            MenuBarSettingsTab(state: state)
+                .tabItem {
+                    Label(state.language == .vi ? "Menu Bar" : "Menu Bar", systemImage: "menubar.rectangle")
+                }
+                .tag(1)
+
             SleepAndDrivesSettingsTab(state: state)
                 .tabItem {
                     Label(state.language == .vi ? "Sleep & Ổ đĩa" : "Sleep & Drives", systemImage: "moon.zzz")
                 }
-                .tag(1)
+                .tag(2)
 
             UpdatesSettingsTab(state: state)
                 .tabItem {
                     Label(state.language == .vi ? "Cập nhật" : "Updates", systemImage: "arrow.triangle.2.circlepath")
                 }
-                .tag(2)
+                .tag(3)
 
             AboutSettingsTab(state: state)
                 .tabItem {
                     Label(state.language == .vi ? "Giới thiệu" : "About", systemImage: "info.circle")
                 }
-                .tag(3)
+                .tag(4)
         }
-        .frame(width: 540, height: 480)
+        .frame(width: 560, height: 530)
         .padding(16)
     }
 }
@@ -87,6 +93,321 @@ private struct GeneralSettingsTab: View {
                 .pickerStyle(.menu)
             } header: {
                 Text(state.language == .vi ? "Giao diện & Hệ thống" : "Appearance & System")
+                    .font(.system(size: 12, weight: .bold))
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+// MARK: - Tab: Thanh Menu Bar
+private struct MenuBarSettingsTab: View {
+    @ObservedObject var state: AppState
+
+    var body: some View {
+        Form {
+            // Section 1: Xem trước thời gian thực
+            Section {
+                VStack(spacing: 12) {
+                    HStack {
+                        Text(state.language == .vi ? "Xem trước giao diện trên Menu Bar" : "Live Menu Bar Preview")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button(state.language == .vi ? "Đặt lại mặc định" : "Reset Defaults") {
+                            state.resetMenuBarDefaults()
+                        }
+                        .font(.system(size: 11))
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(.cyan)
+                    }
+
+                    // Giả lập thanh Menu Bar của macOS
+                    HStack(spacing: 12) {
+                        Image(systemName: "applelogo")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.85))
+                        Text("MacNAP")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.85))
+
+                        Spacer()
+
+                        // Vùng hiển thị icon thực tế của MacNAP
+                        if state.menuBarSplitItems {
+                            HStack(spacing: 8) {
+                                let firstTag = state.menuBarTagOrder.first ?? .usage
+                                let secondTag = (state.menuBarTagOrder.count > 1) ? state.menuBarTagOrder[1] : .charge
+                                let dcIn = state.externalConnected ? state.adapterWatts : 0.0
+
+                                let img1 = SleepingMacIconView.renderSingleTagImage(
+                                    tagType: firstTag,
+                                    watts: (firstTag == .usage) ? (state.systemLoadWatts > 0 ? state.systemLoadWatts : 25.4) : (dcIn > 0 ? dcIn : 23.2),
+                                    labelStyle: state.menuBarLabelStyle,
+                                    customLabel: (firstTag == .usage) ? state.menuBarUsageText : state.menuBarChargeText,
+                                    fontSize: CGFloat(state.menuBarFontSize),
+                                    fontDesign: state.menuBarFontDesign,
+                                    fontWeight: state.menuBarFontWeight
+                                )
+                                Image(nsImage: img1)
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 2)
+                                    .background(Color.white.opacity(0.12))
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+
+                                let img2 = SleepingMacIconView.renderSingleTagImage(
+                                    tagType: secondTag,
+                                    watts: (secondTag == .usage) ? (state.systemLoadWatts > 0 ? state.systemLoadWatts : 25.4) : (dcIn > 0 ? dcIn : 23.2),
+                                    labelStyle: state.menuBarLabelStyle,
+                                    customLabel: (secondTag == .usage) ? state.menuBarUsageText : state.menuBarChargeText,
+                                    fontSize: CGFloat(state.menuBarFontSize),
+                                    fontDesign: state.menuBarFontDesign,
+                                    fontWeight: state.menuBarFontWeight
+                                )
+                                Image(nsImage: img2)
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 2)
+                                    .background(Color.white.opacity(0.12))
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                            }
+                        } else {
+                            let dcIn = state.externalConnected ? state.adapterWatts : 0.0
+                            let img = SleepingMacIconView.renderCombinedMenuBarStatusImage(
+                                usageWatts: (state.systemLoadWatts > 0 ? state.systemLoadWatts : 25.4),
+                                chargeWatts: (dcIn > 0 ? dcIn : 23.2),
+                                tagOrder: state.menuBarTagOrder,
+                                labelStyle: state.menuBarLabelStyle,
+                                usageText: state.menuBarUsageText,
+                                chargeText: state.menuBarChargeText,
+                                fontSize: CGFloat(state.menuBarFontSize),
+                                fontDesign: state.menuBarFontDesign,
+                                fontWeight: state.menuBarFontWeight,
+                                separator: state.menuBarSeparator
+                            )
+                            Image(nsImage: img)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.white.opacity(0.12))
+                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                        }
+
+                        // Giả lập đồng hồ macOS bên phải
+                        Text("20:45")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.75))
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color.black.opacity(0.85))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                    )
+                }
+            } header: {
+                Text(state.language == .vi ? "Trực quan hoá Menu Bar" : "Menu Bar Visualization")
+                    .font(.system(size: 12, weight: .bold))
+            }
+
+            // Section 2: Gộp chung / Tách rời & Thứ tự
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Picker(selection: $state.menuBarSplitItems, label:
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(state.language == .vi ? "Chế độ hiển thị thẻ" : "Status Item Mode")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text(state.language == .vi ? (state.menuBarSplitItems ? "Tách thành 2 ô riêng biệt: Giữ phím ⌘ kéo thả trực tiếp trên Menu Bar macOS để đổi vị trí!" : "Gộp cả 2 thông số vào chung 1 ô duy nhất.") : (state.menuBarSplitItems ? "2 independent items: Hold ⌘ and drag directly on macOS Menu Bar to reorder!" : "Combined into 1 single item."))
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                    ) {
+                        Text(state.language == .vi ? "Gộp chung (1 thẻ)" : "Combined (1 Item)").tag(false)
+                        Text(state.language == .vi ? "Tách rời (2 thẻ - Cho phép ⌘-kéo thả)" : "Split (2 Items - Supports ⌘-Drag)").tag(true)
+                    }
+                    .pickerStyle(.radioGroup)
+
+                    Divider().padding(.vertical, 4)
+
+                    // Thứ tự hiển thị & Hoán đổi
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(state.language == .vi ? "Thứ tự các thẻ" : "Tag Order")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text(state.language == .vi ? "Thẻ bên trái sẽ hiển thị trước thẻ bên phải." : "Left tag displays before right tag.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        HStack(spacing: 6) {
+                            ForEach(state.menuBarTagOrder) { tag in
+                                HStack(spacing: 4) {
+                                    Image(systemName: tag.defaultIcon)
+                                    Text(tag.title(language: state.language))
+                                }
+                                .font(.system(size: 11, weight: .medium))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.secondary.opacity(0.15))
+                                .clipShape(Capsule())
+                            }
+                        }
+
+                        Button {
+                            state.swapMenuBarTagOrder()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.left.arrow.right")
+                                Text(state.language == .vi ? "Đổi vị trí" : "Swap")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+
+                    if state.menuBarSplitItems {
+                        HStack(spacing: 6) {
+                            Image(systemName: "hand.tap")
+                                .foregroundStyle(.cyan)
+                            Text(state.language == .vi ? "Mẹo: Bạn có thể giữ phím ⌘ trên bàn phím rồi dùng chuột kéo thẻ này sang bất kỳ đâu trên Menu Bar của Mac." : "Tip: You can hold ⌘ key and drag each item directly on your macOS Menu Bar.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.cyan)
+                        }
+                        .padding(.top, 4)
+                    }
+                }
+            } header: {
+                Text(state.language == .vi ? "Bố cục & Vị trí" : "Layout & Arrangement")
+                    .font(.system(size: 12, weight: .bold))
+            }
+
+            // Section 3: Kiểu nhãn & Chữ thay thế
+            Section {
+                Picker(selection: $state.menuBarLabelStyle, label:
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(state.language == .vi ? "Kiểu nhãn hiển thị" : "Label Display Style")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(state.language == .vi ? "Chọn dùng biểu tượng icon, chữ (\"usage\"/\"charge\") hoặc cả hai." : "Choose icons, text labels, or both.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                ) {
+                    ForEach(MenuBarLabelStyle.allCases) { style in
+                        Text(style.title(language: state.language)).tag(style)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                if state.menuBarLabelStyle == .textOnly || state.menuBarLabelStyle == .iconAndText {
+                    Divider()
+
+                    HStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(state.language == .vi ? "Chữ cho Tiêu thụ:" : "Usage text:")
+                                .font(.system(size: 12, weight: .medium))
+                            TextField("usage", text: $state.menuBarUsageText)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 140)
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(state.language == .vi ? "Chữ cho Nguồn sạc:" : "Charge text:")
+                                .font(.system(size: 12, weight: .medium))
+                            TextField("charge", text: $state.menuBarChargeText)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 140)
+                        }
+
+                        Spacer()
+                    }
+                }
+
+                // Dấu ngăn cách (chỉ cần thiết khi gộp chung)
+                if !state.menuBarSplitItems {
+                    Divider()
+
+                    Picker(selection: $state.menuBarSeparator, label:
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(state.language == .vi ? "Ký tự ngăn cách giữa 2 thẻ" : "Tag Separator")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text(state.language == .vi ? "Ký tự phân cách giữa thẻ Tiêu thụ và Nguồn sạc." : "Separator between Usage and Charge tags.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                    ) {
+                        ForEach(MenuBarSeparatorStyle.allCases) { sep in
+                            Text(sep.title(language: state.language)).tag(sep)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+            } header: {
+                Text(state.language == .vi ? "Nhãn & Ký tự phân cách" : "Labels & Separator")
+                    .font(.system(size: 12, weight: .bold))
+            }
+
+            // Section 4: Font & Kích thước (Typography)
+            Section {
+                // Slider cỡ chữ
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(state.language == .vi ? "Cỡ chữ (Font Size)" : "Font Size")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(state.language == .vi ? "Khuyên dùng từ 12.0pt đến 13.5pt theo chuẩn macOS." : "Recommended 12.0pt to 13.5pt.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    HStack(spacing: 8) {
+                        Slider(value: $state.menuBarFontSize, in: 10.0...16.0, step: 0.5)
+                            .frame(width: 130)
+                        Text(String(format: "%.1f pt", state.menuBarFontSize))
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .frame(width: 50, alignment: .trailing)
+                    }
+                }
+
+                Divider()
+
+                // Kiểu Font
+                Picker(selection: $state.menuBarFontDesign, label:
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(state.language == .vi ? "Kiểu phông chữ" : "Font Family")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(state.language == .vi ? "Monospaced giúp các con số không bị nhảy bề rộng khi thay đổi giá trị." : "Monospaced avoids width jumping on number changes.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                ) {
+                    ForEach(MenuBarFontDesign.allCases) { design in
+                        Text(design.title).tag(design)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                Divider()
+
+                // Độ đậm chữ
+                Picker(selection: $state.menuBarFontWeight, label:
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(state.language == .vi ? "Độ đậm nét (Weight)" : "Font Weight")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(state.language == .vi ? "Độ nét của chữ trên thanh Menu Bar." : "Thickness of text on Menu Bar.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                ) {
+                    ForEach(MenuBarFontWeight.allCases) { weight in
+                        Text(weight.title).tag(weight)
+                    }
+                }
+                .pickerStyle(.menu)
+            } header: {
+                Text(state.language == .vi ? "Phông chữ & Kiểu dáng (Typography)" : "Typography & Styling")
                     .font(.system(size: 12, weight: .bold))
             }
         }

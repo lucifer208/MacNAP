@@ -148,6 +148,123 @@ public final class AppState: ObservableObject {
             applyDockVisibilityPolicy()
         }
     }
+
+    // MARK: - Menu Bar Customizations
+    @Published public var menuBarSplitItems: Bool = (UserDefaults.standard.object(forKey: "MacNAP_MenuBarSplitItems") as? Bool) ?? false {
+        didSet {
+            UserDefaults.standard.set(menuBarSplitItems, forKey: "MacNAP_MenuBarSplitItems")
+            menuBarConfigChanged.send()
+        }
+    }
+
+    @Published public var menuBarTagOrder: [MenuBarTagType] = {
+        if let data = UserDefaults.standard.string(forKey: "MacNAP_MenuBarTagOrder") {
+            let tags = data.split(separator: ",").compactMap { MenuBarTagType(rawValue: String($0)) }
+            if tags.count == 2 { return tags }
+        }
+        return [.usage, .charge]
+    }() {
+        didSet {
+            let str = menuBarTagOrder.map { $0.rawValue }.joined(separator: ",")
+            UserDefaults.standard.set(str, forKey: "MacNAP_MenuBarTagOrder")
+            menuBarConfigChanged.send()
+        }
+    }
+
+    @Published public var menuBarLabelStyle: MenuBarLabelStyle = {
+        if let raw = UserDefaults.standard.string(forKey: "MacNAP_MenuBarLabelStyle"),
+           let val = MenuBarLabelStyle(rawValue: raw) {
+            return val
+        }
+        return .iconOnly
+    }() {
+        didSet {
+            UserDefaults.standard.set(menuBarLabelStyle.rawValue, forKey: "MacNAP_MenuBarLabelStyle")
+            menuBarConfigChanged.send()
+        }
+    }
+
+    @Published public var menuBarUsageText: String = UserDefaults.standard.string(forKey: "MacNAP_MenuBarUsageText") ?? "usage" {
+        didSet {
+            UserDefaults.standard.set(menuBarUsageText, forKey: "MacNAP_MenuBarUsageText")
+            menuBarConfigChanged.send()
+        }
+    }
+
+    @Published public var menuBarChargeText: String = UserDefaults.standard.string(forKey: "MacNAP_MenuBarChargeText") ?? "charge" {
+        didSet {
+            UserDefaults.standard.set(menuBarChargeText, forKey: "MacNAP_MenuBarChargeText")
+            menuBarConfigChanged.send()
+        }
+    }
+
+    @Published public var menuBarFontSize: Double = (UserDefaults.standard.object(forKey: "MacNAP_MenuBarFontSize") as? Double) ?? 13.0 {
+        didSet {
+            UserDefaults.standard.set(menuBarFontSize, forKey: "MacNAP_MenuBarFontSize")
+            menuBarConfigChanged.send()
+        }
+    }
+
+    @Published public var menuBarFontDesign: MenuBarFontDesign = {
+        if let raw = UserDefaults.standard.string(forKey: "MacNAP_MenuBarFontDesign"),
+           let val = MenuBarFontDesign(rawValue: raw) {
+            return val
+        }
+        return .monospaced
+    }() {
+        didSet {
+            UserDefaults.standard.set(menuBarFontDesign.rawValue, forKey: "MacNAP_MenuBarFontDesign")
+            menuBarConfigChanged.send()
+        }
+    }
+
+    @Published public var menuBarFontWeight: MenuBarFontWeight = {
+        if let raw = UserDefaults.standard.string(forKey: "MacNAP_MenuBarFontWeight"),
+           let val = MenuBarFontWeight(rawValue: raw) {
+            return val
+        }
+        return .semibold
+    }() {
+        didSet {
+            UserDefaults.standard.set(menuBarFontWeight.rawValue, forKey: "MacNAP_MenuBarFontWeight")
+            menuBarConfigChanged.send()
+        }
+    }
+
+    @Published public var menuBarSeparator: MenuBarSeparatorStyle = {
+        if let raw = UserDefaults.standard.string(forKey: "MacNAP_MenuBarSeparator"),
+           let val = MenuBarSeparatorStyle(rawValue: raw) {
+            return val
+        }
+        return .none
+    }() {
+        didSet {
+            UserDefaults.standard.set(menuBarSeparator.rawValue, forKey: "MacNAP_MenuBarSeparator")
+            menuBarConfigChanged.send()
+        }
+    }
+
+    public let menuBarConfigChanged = PassthroughSubject<Void, Never>()
+
+    public func swapMenuBarTagOrder() {
+        if menuBarTagOrder == [.usage, .charge] {
+            menuBarTagOrder = [.charge, .usage]
+        } else {
+            menuBarTagOrder = [.usage, .charge]
+        }
+    }
+
+    public func resetMenuBarDefaults() {
+        menuBarSplitItems = false
+        menuBarTagOrder = [.usage, .charge]
+        menuBarLabelStyle = .iconOnly
+        menuBarUsageText = "usage"
+        menuBarChargeText = "charge"
+        menuBarFontSize = 13.0
+        menuBarFontDesign = .monospaced
+        menuBarFontWeight = .semibold
+        menuBarSeparator = .none
+    }
     public let appVersion: String = AppUpdaterService.currentVersion
     public let appBuild: Int = AppUpdaterService.currentBuild
     @Published public var updateStatus: UpdateCheckStatus = .idle

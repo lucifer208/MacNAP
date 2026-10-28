@@ -2,6 +2,27 @@
 
 ## [1.0.1] - 2026-10-28
 
+### [20:50] feat(menubar): customize menu bar tags, support split ⌘-drag, custom text, font, size, and separator
+- **Tùy biến toàn diện hai thẻ công suất trên Menu Bar macOS (`SleepingMacIconView.swift`, `StatusBarController.swift`, `SettingsView.swift`, `AppState.swift`, `Models.swift`)**:
+  - **Tách rời 2 thẻ độc lập hỗ trợ ⌘-kéo thả trực tiếp trên macOS Menu Bar**:
+    * Cho phép chuyển đổi giữa chế độ *Gộp chung (1 thẻ)* và *Tách rời (2 thẻ độc lập)*.
+    * Khi tách rời, 2 thẻ Tiêu thụ (`⚡`) và Nguồn sạc (`🔌`) trở thành 2 `NSStatusItem` riêng biệt với `.autosaveName`. Người dùng có thể giữ phím `⌘` và kéo thả tự do trực tiếp trên Menu Bar macOS để đổi vị trí bất kỳ đâu.
+    * Cả 2 thẻ đều hỗ trợ click mở popover, double-click hoặc right-click để mở Dashboard.
+  - **Tùy biến Nhãn chữ thay thế ("usage" và "charge")**:
+    * Hỗ trợ 4 kiểu nhãn: *Chỉ Icon* (`⚡ 25.4W`), *Chữ thay thế* (`usage 25.4W`), *Cả Icon & Chữ* (`⚡ usage 25.4W`), *Chỉ số Watt* (`25.4W`).
+    * Cho phép người dùng tự nhập chữ thay thế tùy ý trong Cài đặt (ví dụ: "usage", "charge", "tiêu thụ", "sạc").
+  - **Tùy biến Font chữ, Cỡ chữ & Độ đậm (Typography)**:
+    * Điều chỉnh cỡ chữ mượt mà từ 10.0pt đến 16.0pt (mặc định 13.0pt chuẩn macOS).
+    * Chọn kiểu Font: *Monospaced (Số cố định chống giật)*, *SF Pro*, *Rounded (Bo tròn)*, *Serif*.
+    * Chọn độ đậm: *Regular*, *Medium*, *Semibold*, *Bold*.
+  - **Dấu ngăn cách (Separator)**:
+    * Bật/tắt và chọn ký tự ngăn cách khi gộp chung: *Khoảng trống*, *Gạch đứng (`|`)*, *Gạch ngang (`—`)*, *Gạch chéo (`/`)*, *Dấu chấm tròn (`•`)*.
+  - **Hoán đổi thứ tự hiển thị (Tag Order)**:
+    * Hỗ trợ nút hoán đổi nhanh vị trí `[ ⚡ Tiêu thụ ] ⇄ [ 🔌 Nguồn sạc ]` ngay trong Settings.
+  - **Live Menu Bar Preview**:
+    * Khung giả lập giao diện macOS Menu Bar trực tiếp trong tab Cài đặt mới *Menu Bar*, hiển thị tức thì mọi thay đổi thiết kế theo thời gian thực.
+- **Tự động đóng gói bản dựng `v1.0.1.2610282011`**: Cập nhật file nhị phân, DMG và ZIP.
+
 ### [20:38] fix(charts): eliminate label collisions, draw full 3-line realtime power, and fix menu truncation
 - **Sửa triệt để lỗi đè chữ trên biểu đồ Công suất từng thiết bị (`DashboardView.swift`)**:
   - Khắc phục lỗi `0.61W 0.61W 0.61W` đè lấp lên nhau do các USB Hub trùng tên bị gộp chung vào 1 dòng. Tự động định danh riêng biệt từng thiết bị (`USB2.1 Hub #1`, `USB2.1 Hub #2`).

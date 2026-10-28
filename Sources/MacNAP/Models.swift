@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 public struct PowerSample: Identifiable {
     public let id = UUID()
@@ -316,4 +317,125 @@ public struct BatteryChartHourlySample: Identifiable, Hashable {
     public let isSleepPeriod: Bool     // true nếu đang sleep
     public let watts: Double           // Công suất ước tính
     public let powerSourceText: String // "Cắm sạc AC" hoặc "Đang dùng Pin"
+}
+
+// MARK: - Menu Bar Customization Models
+
+/// Kiểu thẻ thông số trên Menu Bar
+public enum MenuBarTagType: String, Codable, CaseIterable, Identifiable {
+    case usage = "usage"
+    case charge = "charge"
+
+    public var id: String { rawValue }
+
+    public func title(language: AppLanguage) -> String {
+        switch self {
+        case .usage: return language == .vi ? "Tiêu thụ (Usage)" : "Power Usage"
+        case .charge: return language == .vi ? "Nguồn sạc (Charge)" : "Power Charge"
+        }
+    }
+
+    public var defaultIcon: String {
+        switch self {
+        case .usage: return "bolt.fill"
+        case .charge: return "powerplug.fill"
+        }
+    }
+}
+
+/// Kiểu hiển thị nhãn của thẻ Menu Bar
+public enum MenuBarLabelStyle: String, Codable, CaseIterable, Identifiable {
+    case iconOnly = "iconOnly"           // ⚡ 25.4W
+    case textOnly = "textOnly"           // usage 25.4W
+    case iconAndText = "iconAndText"     // ⚡ usage 25.4W
+    case numberOnly = "numberOnly"       // 25.4W
+
+    public var id: String { rawValue }
+
+    public func title(language: AppLanguage) -> String {
+        switch self {
+        case .iconOnly: return language == .vi ? "Chỉ Icon (⚡ / 🔌)" : "Icon Only (⚡ / 🔌)"
+        case .textOnly: return language == .vi ? "Chữ (\"usage\" / \"charge\")" : "Text (\"usage\" / \"charge\")"
+        case .iconAndText: return language == .vi ? "Cả Icon & Chữ" : "Icon & Text"
+        case .numberOnly: return language == .vi ? "Chỉ số Watt" : "Watts Only"
+        }
+    }
+}
+
+/// Kiểu thiết kế font chữ trên Menu Bar
+public enum MenuBarFontDesign: String, Codable, CaseIterable, Identifiable {
+    case monospaced = "monospaced"
+    case system = "system"
+    case rounded = "rounded"
+    case serif = "serif"
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .monospaced: return "Monospaced (Số cố định)"
+        case .system: return "SF Pro (Mặc định)"
+        case .rounded: return "Rounded (Bo tròn)"
+        case .serif: return "Serif (Có chân)"
+        }
+    }
+}
+
+/// Độ đậm nét của chữ trên Menu Bar
+public enum MenuBarFontWeight: String, Codable, CaseIterable, Identifiable {
+    case regular = "regular"
+    case medium = "medium"
+    case semibold = "semibold"
+    case bold = "bold"
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .regular: return "Regular (Bình thường)"
+        case .medium: return "Medium (Vừa)"
+        case .semibold: return "Semibold (Đậm vừa)"
+        case .bold: return "Bold (Đậm)"
+        }
+    }
+
+    public var nsWeight: NSFont.Weight {
+        switch self {
+        case .regular: return .regular
+        case .medium: return .medium
+        case .semibold: return .semibold
+        case .bold: return .bold
+        }
+    }
+}
+
+/// Ký tự ngăn cách giữa 2 thẻ khi gộp chung
+public enum MenuBarSeparatorStyle: String, Codable, CaseIterable, Identifiable {
+    case none = "none"           // Khoảng trắng
+    case verticalBar = "bar"     // |
+    case dash = "dash"           // —
+    case slash = "slash"         // /
+    case bullet = "bullet"       // •
+
+    public var id: String { rawValue }
+
+    public var displaySymbol: String {
+        switch self {
+        case .none: return " "
+        case .verticalBar: return "|"
+        case .dash: return "—"
+        case .slash: return "/"
+        case .bullet: return "•"
+        }
+    }
+
+    public func title(language: AppLanguage) -> String {
+        switch self {
+        case .none: return language == .vi ? "Khoảng trống (Mặc định)" : "Space (Default)"
+        case .verticalBar: return language == .vi ? "Gạch đứng ( | )" : "Vertical Bar ( | )"
+        case .dash: return language == .vi ? "Gạch ngang ( — )" : "Dash ( — )"
+        case .slash: return language == .vi ? "Gạch chéo ( / )" : "Slash ( / )"
+        case .bullet: return language == .vi ? "Dấu chấm tròn ( • )" : "Bullet ( • )"
+        }
+    }
 }

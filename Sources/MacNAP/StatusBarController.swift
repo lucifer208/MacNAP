@@ -4,7 +4,8 @@ import Combine
 
 @MainActor
 public final class StatusBarController: NSObject {
-    private var statusItem: NSStatusItem
+    private var primaryStatusItem: NSStatusItem
+    private var secondaryStatusItem: NSStatusItem?
     private var popover: NSPopover
     private let state: AppState
     private let onOpenDashboard: () -> Void
@@ -21,12 +22,12 @@ public final class StatusBarController: NSObject {
         self.state = state
         self.onOpenDashboard = onOpenDashboard
         self.onOpenDeviceDetail = onOpenDeviceDetail
-        self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        self.primaryStatusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         self.popover = NSPopover()
         super.init()
 
         setupPopover()
-        setupStatusButton()
+        syncStatusItems()
         bindTelemetryUpdates()
     }
 
@@ -48,31 +49,103 @@ public final class StatusBarController: NSObject {
         popover.contentViewController = NSHostingController(rootView: rootView)
     }
 
-    private func setupStatusButton() {
-        guard let button = statusItem.button else { return }
+    private func configureButton(_ button: NSStatusBarButton?) {
+        guard let button = button else { return }
         button.target = self
         button.action = #selector(handleStatusBarClick(_:))
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        updateButtonImage()
+    }
+
+    private func syncStatusItems() {
+        if state.menuBarSplitItems {
+            let firstTag = state.menuBarTagOrder.first ?? .usage
+            let secondTag = (state.menuBarTagOrder.count > 1) ? state.menuBarTagOrder[1] : .charge
+
+            primaryStatusItem.autosaveName = "com.lu.MacNAP.tag.\(firstTag.rawValue)"
+            configureButton(primaryStatusItem.button)
+
+            if secondaryStatusItem == nil {
+                let sec = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+                configureButton(sec.button)
+                secondaryStatusItem = sec
+            }
+            secondaryStatusItem?.autosaveName = "com.lu.MacNAP.tag.\(secondTag.rawValue)"
+            configureButton(secondaryStatusItem?.button)
+        } else {
+            if let sec = secondaryStatusItem {
+                NSStatusBar.system.removeStatusItem(sec)
+                secondaryStatusItem = nil
+            }
+            primaryStatusItem.autosaveName = "com.lu.MacNAP.combined"
+            configureButton(primaryStatusItem.button)
+        }
+        updateButtonImages()
     }
 
     private func bindTelemetryUpdates() {
         Publishers.CombineLatest3(state.$systemLoadWatts, state.$adapterWatts, state.$externalConnected)
             .receive(on: RunLoop.main)
             .sink { [weak self] _, _, _ in
-                self?.updateButtonImage()
+                self?.updateButtonImages()
+            }
+            .store(in: &cancellables)
+
+        state.menuBarConfigChanged
+            .receive(on: RunLoop.main)
+            .sink { [weak self] in
+                self?.syncStatusItems()
             }
             .store(in: &cancellables)
     }
 
-    private func updateButtonImage() {
-        guard let button = statusItem.button else { return }
+    private func updateButtonImages() {
         let dcIn = state.externalConnected ? state.adapterWatts : 0.0
-        let img = SleepingMacIconView.renderMenuBarStatusImage(
-            systemTotalW: state.systemLoadWatts,
-            dcInW: dcIn
-        )
-        button.image = img
+        let fontSize = CGFloat(state.menuBarFontSize)
+        let fontDesign = state.menuBarFontDesign
+        let fontWeight = state.menuBarFontWeight
+        let labelStyle = state.menuBarLabelStyle
+
+        if state.menuBarSplitItems {
+            let firstTag = state.menuBarTagOrder.first ?? .usage
+            let secondTag = (state.menuBarTagOrder.count > 1) ? state.menuBarTagOrder[1] : .charge
+
+            let firstWatts = (firstTag == .usage) ? state.systemLoadWatts : dcIn
+            let firstCustom = (firstTag == .usage) ? state.menuBarUsageText : state.menuBarChargeText
+            primaryStatusItem.button?.image = SleepingMacIconView.renderSingleTagImage(
+                tagType: firstTag,
+                watts: firstWatts,
+                labelStyle: labelStyle,
+                customLabel: firstCustom,
+                fontSize: fontSize,
+                fontDesign: fontDesign,
+                fontWeight: fontWeight
+            )
+
+            let secondWatts = (secondTag == .usage) ? state.systemLoadWatts : dcIn
+            let secondCustom = (secondTag == .usage) ? state.menuBarUsageText : state.menuBarChargeText
+            secondaryStatusItem?.button?.image = SleepingMacIconView.renderSingleTagImage(
+                tagType: secondTag,
+                watts: secondWatts,
+                labelStyle: labelStyle,
+                customLabel: secondCustom,
+                fontSize: fontSize,
+                fontDesign: fontDesign,
+                fontWeight: fontWeight
+            )
+        } else {
+            primaryStatusItem.button?.image = SleepingMacIconView.renderCombinedMenuBarStatusImage(
+                usageWatts: state.systemLoadWatts,
+                chargeWatts: dcIn,
+                tagOrder: state.menuBarTagOrder,
+                labelStyle: labelStyle,
+                usageText: state.menuBarUsageText,
+                chargeText: state.menuBarChargeText,
+                fontSize: fontSize,
+                fontDesign: fontDesign,
+                fontWeight: fontWeight,
+                separator: state.menuBarSeparator
+            )
+        }
     }
 
     @objc private func handleStatusBarClick(_ sender: NSStatusBarButton) {
@@ -97,8 +170,8 @@ public final class StatusBarController: NSObject {
         lastClickTimestamp = now
         singleClickWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in
-            guard let self = self, let btn = self.statusItem.button else { return }
-            self.togglePopover(btn)
+            guard let self = self else { return }
+            self.togglePopover(sender)
         }
         singleClickWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.22, execute: work)
@@ -113,4 +186,3 @@ public final class StatusBarController: NSObject {
         }
     }
 }
-
