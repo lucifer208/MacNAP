@@ -1286,7 +1286,7 @@ public struct DashboardView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Label(
-                        L.t("Biểu đồ Công suất Thời gian thực (1.0s): Tiêu thụ vs Sạc vào", "Realtime Power Chart (1.0s): Power Load vs Power In"),
+                        L.t("Biểu đồ Công suất Thời gian thực (Live 1.0s)", "Realtime Power Telemetry (Live 1.0s)"),
                         systemImage: "waveform.path.ecg"
                     )
                     .font(.headline)
@@ -1304,7 +1304,7 @@ public struct DashboardView: View {
                         )
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [.orange.opacity(0.28), .orange.opacity(0.02)],
+                                colors: [.orange.opacity(0.25), .orange.opacity(0.01)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -1320,6 +1320,14 @@ public struct DashboardView: View {
 
                         LineMark(
                             x: .value("Time", sample.timestamp),
+                            y: .value("Ngoại vi (W)", sample.peripheralsWatts),
+                            series: .value("Type", "Peripherals")
+                        )
+                        .foregroundStyle(.cyan)
+                        .lineStyle(StrokeStyle(lineWidth: 2.0))
+
+                        LineMark(
+                            x: .value("Time", sample.timestamp),
                             y: .value("Sạc vào (W)", sample.adapterInputWatts),
                             series: .value("Type", "Power In")
                         )
@@ -1327,13 +1335,20 @@ public struct DashboardView: View {
                         .lineStyle(StrokeStyle(lineWidth: 2.0, dash: [5, 3]))
                     }
                 }
+                .chartXAxis {
+                    AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel(format: .dateTime.minute().second())
+                    }
+                }
                 .chartYAxisLabel("Watts (W)")
                 .frame(height: 205)
 
-                HStack(spacing: 18) {
+                HStack(spacing: 16) {
                     legendDot(color: .orange, label: L.t(String(format: "Tổng tiêu thụ: %.2f W", state.systemLoadWatts), String(format: "Total Load: %.2f W", state.systemLoadWatts)))
                     legendDot(color: .green, label: L.t(String(format: "Nguồn sạc vào: %.2f W", state.externalConnected ? state.adapterWatts : 0.0), String(format: "Power In: %.2f W", state.externalConnected ? state.adapterWatts : 0.0)))
-                    legendDot(color: .cyan, label: L.t(String(format: "Thiết bị ngoại vi: %.2f W", state.peripheralsTotalWatts), String(format: "Peripherals: %.2f W", state.peripheralsTotalWatts)))
+                    legendDot(color: .cyan, label: L.t(String(format: "Ngoại vi: %.2f W", state.peripheralsTotalWatts), String(format: "Peripherals: %.2f W", state.peripheralsTotalWatts)))
                 }
                 .font(.caption2)
             }
@@ -1347,6 +1362,19 @@ public struct DashboardView: View {
 
     private var realtimeBarComparisonCard: some View {
         let L = state.l10n
+        let displayItems: [(id: String, name: String, activeW: Double, standbyW: Double)] = {
+            var counts: [String: Int] = [:]
+            var res: [(id: String, name: String, activeW: Double, standbyW: Double)] = []
+            for p in state.peripherals.prefix(6) {
+                let c = counts[p.name, default: 0] + 1
+                counts[p.name] = c
+                let label = c > 1 ? "\(p.name) #\(c)" : p.name
+                res.append((id: p.id, name: label, activeW: p.watts, standbyW: p.sleepWatts))
+            }
+            return res
+        }()
+        let maxW = max(2.5, ((displayItems.map(\.activeW).max() ?? 2.0) * 1.2))
+
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Label(
@@ -1358,25 +1386,44 @@ public struct DashboardView: View {
             }
 
             Chart {
-                ForEach(state.peripherals.prefix(7)) { dev in
+                ForEach(displayItems, id: \.id) { item in
                     BarMark(
-                        x: .value("Watts", dev.watts),
-                        y: .value("Device", dev.name)
+                        x: .value("Watts", item.activeW),
+                        y: .value("Thiết bị", item.name)
                     )
                     .foregroundStyle(.pink)
-                    .position(by: .value("Mode", "Active"))
-                    .annotation(position: .trailing) {
-                        Text(String(format: "%.2fW", dev.watts))
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
+                    .position(by: .value("Chế độ", "Active"))
 
                     BarMark(
-                        x: .value("Watts", dev.sleepWatts),
-                        y: .value("Device", dev.name)
+                        x: .value("Watts", item.standbyW),
+                        y: .value("Thiết bị", item.name)
                     )
                     .foregroundStyle(.indigo.opacity(0.85))
-                    .position(by: .value("Mode", "Standby"))
+                    .position(by: .value("Chế độ", "Standby"))
+                }
+            }
+            .chartXScale(domain: 0...maxW)
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 4)) { val in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let d = val.as(Double.self) {
+                            Text(String(format: "%.1fW", d))
+                                .font(.caption2.monospacedDigit())
+                        }
+                    }
+                }
+            }
+            .chartYAxis {
+                AxisMarks { val in
+                    AxisValueLabel {
+                        if let str = val.as(String.self) {
+                            Text(str)
+                                .font(.system(size: 11, weight: .medium))
+                                .lineLimit(1)
+                        }
+                    }
                 }
             }
             .chartXAxisLabel("Watts (W)")
@@ -1475,13 +1522,14 @@ public struct DashboardView: View {
                         if !activeList.isEmpty {
                             Picker("", selection: $state.selectedSessionID) {
                                 ForEach(activeList) { item in
-                                    Text("\(item.titleLabel) (\(String(format: "%.1fh", item.durationHours)) • -\(item.dropPercent)% • \(item.darkWakeCount) DarkWake)")
+                                    let cleanTitle = item.titleLabel.replacingOccurrences(of: " → \(item.titleLabel.prefix(5))", with: " →")
+                                    Text("\(cleanTitle) (\(String(format: "%.1fh", item.durationHours)) • -\(item.dropPercent)% • \(item.darkWakeCount) DarkWake)")
                                         .tag(Optional(item.id))
                                 }
                             }
                             .labelsHidden()
                             .pickerStyle(.menu)
-                            .frame(maxWidth: 320)
+                            .frame(maxWidth: 380)
                         }
                     }
                     .padding(.horizontal, 10)
@@ -1596,7 +1644,7 @@ public struct DashboardView: View {
                                 y: .value("Full Guard (%)", predictedFullGuardPct),
                                 series: .value("Scenario", "Full Guard")
                             )
-                            .foregroundStyle(.mint)
+                            .foregroundStyle(Color(red: 0.72, green: 0.45, blue: 0.98))
                             .lineStyle(StrokeStyle(lineWidth: 2.0, dash: [3, 3]))
                         }
 
@@ -1666,7 +1714,7 @@ public struct DashboardView: View {
                 HStack(spacing: 16) {
                     legendDot(color: .cyan, label: L.t("Thực tế (% Pin hao hụt)", "Actual Battery Drain"))
                     legendDot(color: .green, label: L.t("Dự đoán khi bật Auto-Unmount", "Predicted with Auto-Unmount"))
-                    legendDot(color: .mint, label: L.t("Bảo vệ Toàn diện (Full Guard)", "Full Guard Savings"))
+                    legendDot(color: Color(red: 0.72, green: 0.45, blue: 0.98), label: L.t("Bảo vệ Toàn diện (Full Guard)", "Full Guard Savings"))
                     legendDot(color: .orange, label: L.t("Vạch cam đáy: Thức ngầm DarkWake", "Orange Ticks: DarkWake"))
                 }
                 .font(.caption2)

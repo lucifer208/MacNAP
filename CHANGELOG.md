@@ -2,6 +2,18 @@
 
 ## [1.0.1] - 2026-10-28
 
+### [20:38] fix(charts): eliminate label collisions, draw full 3-line realtime power, and fix menu truncation
+- **Sửa triệt để lỗi đè chữ trên biểu đồ Công suất từng thiết bị (`DashboardView.swift`)**:
+  - Khắc phục lỗi `0.61W 0.61W 0.61W` đè lấp lên nhau do các USB Hub trùng tên bị gộp chung vào 1 dòng. Tự động định danh riêng biệt từng thiết bị (`USB2.1 Hub #1`, `USB2.1 Hub #2`).
+  - Gỡ bỏ annotation trailing gây xung đột vị trí, mở rộng thang đo X tự động (`0.0W` đến cực đại) để thanh đo không bị tràn viền.
+- **Vẽ đầy đủ 3 đường tín hiệu cho Biểu đồ Công suất Realtime (`DashboardView.swift`)**:
+  - Vẽ đủ 3 đường: Tổng tiêu thụ (Cam), Nguồn sạc vào (Xanh lá), Thiết bị ngoại vi (Xanh Cyan) khớp 100% với chú thích.
+  - Sửa trục thời gian X hiển thị phút:giây gọn gàng, loại bỏ hoàn toàn dấu ba chấm `...` gây khó chịu.
+- **Khắc phục cắt chữ ở menu chọn phiên ngủ (`DashboardView.swift`)**:
+  - Rút gọn hiển thị phiên ngủ trên cùng một ngày (vd: `28/10 16:12 → 18:34`) và mở rộng ô chọn lên 380px, không còn bị cắt `18 Da...`.
+  - Phân tách màu sắc đường kịch bản: `Đường Thực tế (Cyan)`, `Dự đoán Auto-Unmount (Xanh lá)`, `Bảo vệ Toàn diện (Tím Lavender)` tách biệt hoàn toàn không gây nhầm lẫn.
+- **Tự động đóng gói bản dựng `v1.0.1.2610282055`**: Hoàn tất cập nhật bản chạy mới.
+
 ### [20:33] feat(charts): overhaul visual clarity, legends, and diagnostic hints across all dashboard charts
 - **Tối ưu trực quan hóa toàn bộ biểu đồ, cực kỳ dễ hiểu (`DashboardView.swift`)**:
   - **Biểu đồ Mức pin (%)**:
