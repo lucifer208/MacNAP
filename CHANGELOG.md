@@ -2,6 +2,20 @@
 
 ## [Unreleased] - 2026-10-28
 
+### [12:46] feat: redesign App Update Center, separate Auto-Check & Auto-Install toggles & set author VPBank donate
+- **Thiết kế lại toàn diện Trung tâm Cập nhật Ứng dụng (`UpdateSettingsSheetView` trong `AppUpdateAndDonateService.swift`)**:
+  - Giao diện trung tâm cập nhật chuẩn macOS: Hiển thị App Icon, phiên bản hiện tại `v1.0.0 (Build 100)`, huy hiệu trạng thái (Bản mới nhất / Đang kiểm tra / Phát hiện bản mới kèm ghi chú phát hành / Đang cài đặt).
+  - Tách biệt rõ ràng **2 công tắc cập nhật độc lập**:
+    1. **`Tự động kiểm tra bản mới` (`autoCheckUpdateEnabled`)**: Chạy ngầm kiểm tra GitHub Releases khi mở app hoặc định kỳ.
+    2. **`Tự động cài đặt bản mới` (`autoInstallUpdateEnabled`)**: Khi phát hiện bản mới, tự động tải về, cập nhật và khởi động lại MacNAP.
+  - Các nút hành động: **Kiểm tra bản cập nhật ngay**, **Tải & Cài đặt bản mới**, và **Xem GitHub Releases**.
+- **Cập nhật chính xác tài khoản thụ hưởng tác giả MacNAP (`AuthorDonateInfo`, `DonateSheetView`)**:
+  - **Ngân hàng**: `VPBank` (Ngân hàng TMCP Việt Nam Thịnh Vượng).
+  - **Số tài khoản (STK)**: `8888071992` (kèm nút bấm 1 chạm **Copy STK** to rõ).
+  - **Chủ tài khoản**: `HUỲNH TUẤN HUY` (kèm nút **Copy Tên**).
+  - **Nội dung chuyển khoản mặc định**: `MacNAP Donate` (kèm nút **Copy Nội dung**).
+  - Tự động sinh mã **VietQR thực tế** cập nhật động theo mức ủng hộ (`30.000đ ☕️`, `50.000đ 🍜`, `100.000đ 🚀`, `200.000đ 💎` hoặc `Tuỳ tâm ❤️`), người dùng chỉ cần mở bất kỳ ứng dụng ngân hàng nào quét mã là tự điền đúng tên, số tài khoản và nội dung.
+
 ### [12:38] fix: remove duplicate update/donate buttons, add Report Issue sheet & allow custom user donate info with real VietQR
 - **Xoá trùng lặp nút Update & Donate (`DashboardView.swift`, `MenuBarPopoverView.swift`)**:
   - Gỡ bỏ hoàn toàn nút kiểm tra update và donate bị trùng ở thanh Toolbar trên cùng.

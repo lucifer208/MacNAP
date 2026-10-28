@@ -117,11 +117,18 @@ public final class AppState: ObservableObject {
     public let appVersion: String = AppUpdaterService.currentVersion
     public let appBuild: Int = AppUpdaterService.currentBuild
     @Published public var updateStatus: UpdateCheckStatus = .idle
-    @Published public var autoUpdateEnabled: Bool = (UserDefaults.standard.object(forKey: "MacNAP_AutoUpdate") as? Bool) ?? true {
+    @Published public var autoCheckUpdateEnabled: Bool = (UserDefaults.standard.object(forKey: "MacNAP_AutoCheckUpdate") as? Bool) ?? true {
         didSet {
-            UserDefaults.standard.set(autoUpdateEnabled, forKey: "MacNAP_AutoUpdate")
+            UserDefaults.standard.set(autoCheckUpdateEnabled, forKey: "MacNAP_AutoCheckUpdate")
         }
     }
+    @Published public var autoInstallUpdateEnabled: Bool = (UserDefaults.standard.object(forKey: "MacNAP_AutoInstallUpdate") as? Bool) ?? false {
+        didSet {
+            UserDefaults.standard.set(autoInstallUpdateEnabled, forKey: "MacNAP_AutoInstallUpdate")
+        }
+    }
+    @Published public var lastCheckTime: Date?
+    @Published public var showUpdateSheet: Bool = false
     @Published public var showDonateSheet: Bool = false
     @Published public var showReportSheet: Bool = false
     @Published public var lastActionLog: String = "Đang theo dõi công suất & thiết bị ngoại vi thời gian thực (1.0s)."
@@ -146,7 +153,7 @@ public final class AppState: ObservableObject {
         syncDarkWakeSettingState()
         refreshAll()
         refreshWakeLogs()
-        if autoUpdateEnabled {
+        if autoCheckUpdateEnabled {
             checkForUpdates(silentIfUpToDate: true)
         }
         actionHistory.append(
@@ -201,6 +208,7 @@ public final class AppState: ObservableObject {
                 await AppUpdaterService.shared.checkForUpdates()
             }.value
             self.updateStatus = status
+            self.lastCheckTime = Date()
             self.appDiagnosticLogs = AppDiagnosticLogger.shared.recentEntries()
 
             switch status {
@@ -216,7 +224,7 @@ public final class AppState: ObservableObject {
                     "Đã có bản cập nhật mới v\(manifest.version)! Nhấn 'Cập nhật ngay' để cài đặt.",
                     "New update v\(manifest.version) available! Click 'Update Now' to install."
                 )
-                if self.autoUpdateEnabled && !silentIfUpToDate {
+                if self.autoInstallUpdateEnabled {
                     self.performSelfUpdateNow(manifest: manifest)
                 }
             case .failed(let reason):

@@ -270,8 +270,12 @@ public struct MenuBarPopoverView: View {
                     compactToggleRow(title: L.launchAtLogin, isOn: $state.launchAtLogin)
                     compactToggleRow(title: L.hideDockIcon, isOn: $state.hideDockIcon)
                     compactToggleRow(
-                        title: L.t("Tự động kiểm tra & cập nhật", "Auto-check & update"),
-                        isOn: $state.autoUpdateEnabled
+                        title: L.t("Tự động kiểm tra bản mới", "Auto-check updates"),
+                        isOn: $state.autoCheckUpdateEnabled
+                    )
+                    compactToggleRow(
+                        title: L.t("Tự động cài đặt bản mới", "Auto-install updates"),
+                        isOn: $state.autoInstallUpdateEnabled
                     )
                 }
                 .padding(8)
@@ -282,16 +286,15 @@ public struct MenuBarPopoverView: View {
 
             HStack(spacing: 8) {
                 Button {
-                    if case .updateAvailable(let manifest) = state.updateStatus {
-                        state.performSelfUpdateNow(manifest: manifest)
-                    } else {
-                        state.checkForUpdates(silentIfUpToDate: false)
+                    onOpenDashboard()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        state.showUpdateSheet = true
                     }
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.triangle.2.circlepath")
                             .font(.system(size: 10, weight: .bold))
-                        Text(L.t("Kiểm tra Update", "Check Update"))
+                        Text(L.t("Cập nhật", "Update"))
                             .font(.system(size: 10.5, weight: .semibold))
                     }
                     .padding(.horizontal, 8)

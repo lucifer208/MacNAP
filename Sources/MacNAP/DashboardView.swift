@@ -37,6 +37,9 @@ public struct DashboardView: View {
             .background(Color(nsColor: .windowBackgroundColor))
         }
         .frame(minWidth: 1080, minHeight: 750)
+        .sheet(isPresented: $state.showUpdateSheet) {
+            UpdateSettingsSheetView(state: state)
+        }
         .sheet(isPresented: $state.showDonateSheet) {
             DonateSheetView(state: state)
         }
@@ -166,17 +169,17 @@ public struct DashboardView: View {
                     sidebarToggleRow(title: L.launchAtLogin, isOn: $state.launchAtLogin)
                     sidebarToggleRow(title: L.hideDockIcon, isOn: $state.hideDockIcon)
                     sidebarToggleRow(
-                        title: L.t("Tự động kiểm tra & cập nhật", "Auto-check & update"),
-                        isOn: $state.autoUpdateEnabled
+                        title: L.t("Tự động kiểm tra bản mới", "Auto-check for updates"),
+                        isOn: $state.autoCheckUpdateEnabled
+                    )
+                    sidebarToggleRow(
+                        title: L.t("Tự động cài đặt bản mới", "Auto-install updates"),
+                        isOn: $state.autoInstallUpdateEnabled
                     )
 
                     HStack(spacing: 6) {
                         Button {
-                            if case .updateAvailable(let manifest) = state.updateStatus {
-                                state.performSelfUpdateNow(manifest: manifest)
-                            } else {
-                                state.checkForUpdates(silentIfUpToDate: false)
-                            }
+                            state.showUpdateSheet = true
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: "arrow.triangle.2.circlepath")
