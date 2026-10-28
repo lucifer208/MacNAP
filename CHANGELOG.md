@@ -2,6 +2,13 @@
 
 ## [Unreleased] - 2026-10-28
 
+### [13:10] fix(ui): redesign MenuBar popover footer with equal-width action buttons and dedicated quit bar
+- **Thiết kế lại toàn bộ cụm 4 nút chân trang MenuBar (`MenuBarPopoverView.swift`)**:
+  - Khắc phục triệt để hiện tượng chữ bị ép xuống 2 dòng (`Cập \n nhật`) do thiếu không gian ngang:
+    - **Hàng 1**: Chia đều thành 3 nút bấm chức năng chuẩn kích thước cân xứng (`[🔄 Cập nhật]`, `[❤️ Ủng hộ]`, `[🐞 Báo lỗi]`) sử dụng `maxWidth: .infinity`, bo góc mềm mại kèm viền nhẹ màu chủ đề, khoá `.fixedSize()` và `.lineLimit(1)` chống vỡ giao diện.
+    - **Hàng 2**: Thanh trạng thái đáy tách biệt với số hiệu phiên bản `MacNAP v1.0.0` dạng monospaced tinh tế bên trái và nút `⏻ Thoát MacNAP` bên phải với màu đỏ dịu mắt.
+  - Tăng độ rộng popover lên `355pt` cho không gian thoáng, bố cục chuẩn macOS native.
+
 ### [13:04] feat: pre-fill GitHub Issues report with markdown diagnostics & trigger live GitHub update check in Report modal
 - **Tự động mở và điền sẵn nội dung lên GitHub Issues (`ReportIssueSheetView` trong `AppUpdateAndDonateService.swift`)**:
   - Nhấn nút **"Mở GitHub Issues & Tự điền sẵn log"** sẽ mã hoá toàn bộ tiêu đề và nội dung markdown chẩn đoán (phiên bản, đời máy MacBook, macOS, công suất, ngoại vi, tiến trình chặn sleep, trích xuất log) trực tiếp vào query URL GitHub `https://github.com/lucifer208/MacNAP/issues/new?title=...&body=...`, trình duyệt mở lên là nội dung đã nằm sẵn trong khung tạo Issue.

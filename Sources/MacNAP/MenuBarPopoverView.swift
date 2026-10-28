@@ -284,76 +284,94 @@ public struct MenuBarPopoverView: View {
 
             Divider()
 
+            // 1. Equal-Width 3 Action Buttons (Zero text wrap, balanced heights & colors)
             HStack(spacing: 8) {
-                Button {
+                footerActionButton(
+                    icon: "arrow.triangle.2.circlepath",
+                    label: L.t("Cập nhật", "Update"),
+                    color: .cyan
+                ) {
                     onOpenDashboard()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                         state.showUpdateSheet = true
                     }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 10, weight: .bold))
-                        Text(L.t("Cập nhật", "Update"))
-                            .font(.system(size: 10.5, weight: .semibold))
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.cyan.opacity(0.15), in: Capsule())
-                    .foregroundStyle(.cyan)
                 }
-                .buttonStyle(.plain)
 
-                Button {
+                footerActionButton(
+                    icon: "heart.fill",
+                    label: L.t("Ủng hộ", "Donate"),
+                    color: .pink
+                ) {
                     onOpenDashboard()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                         state.showDonateSheet = true
                     }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "heart.fill")
-                            .font(.system(size: 10, weight: .bold))
-                        Text(L.t("Ủng hộ", "Donate"))
-                            .font(.system(size: 10.5, weight: .semibold))
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.pink.opacity(0.18), in: Capsule())
-                    .foregroundStyle(.pink)
                 }
-                .buttonStyle(.plain)
 
-                Button {
+                footerActionButton(
+                    icon: "ladybug.fill",
+                    label: L.t("Báo lỗi", "Report"),
+                    color: .orange
+                ) {
                     onOpenDashboard()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                         state.showReportSheet = true
                     }
-                } label: {
-                    HStack(spacing: 3) {
-                        Image(systemName: "ladybug.fill")
-                            .font(.system(size: 9.5))
-                        Text(L.t("Báo lỗi", "Report"))
-                            .font(.system(size: 10, weight: .semibold))
-                    }
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 4)
-                    .background(Color.orange.opacity(0.18), in: Capsule())
-                    .foregroundStyle(.orange)
                 }
-                .buttonStyle(.plain)
+            }
+
+            // 2. Sleek Bottom Bar (Version info on left, Quit button on right)
+            HStack {
+                Text("MacNAP v\(state.appVersion)")
+                    .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.tertiary)
 
                 Spacer()
 
-                Button(L.quitApp) {
+                Button {
                     NSApplication.shared.terminate(nil)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "power")
+                            .font(.system(size: 9.5, weight: .bold))
+                        Text(L.quitApp)
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundStyle(.red.opacity(0.85))
                 }
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.red)
                 .buttonStyle(.plain)
             }
+            .padding(.top, 2)
         }
         .padding(14)
-        .frame(width: 345)
+        .frame(width: 355)
+    }
+
+    private func footerActionButton(
+        icon: String,
+        label: String,
+        color: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: .bold))
+                Text(label)
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(color.opacity(0.25), lineWidth: 1)
+            )
+            .foregroundStyle(color)
+        }
+        .buttonStyle(.plain)
     }
 
     private func miniMetricBox(icon: String, color: Color, label: String, value: String) -> some View {
