@@ -67,10 +67,14 @@ public final class MacNAPAppDelegate: NSObject, NSApplicationDelegate, UNUserNot
     }
 
     public func activateAppWithRegularPolicy() {
-        NSApplication.shared.setActivationPolicy(.regular)
+        if NSApplication.shared.activationPolicy() != .regular {
+            NSApplication.shared.setActivationPolicy(.regular)
+        }
         state.applyCustomDockIcon()
         setupAppMainMenu()
-        NSApplication.shared.activate(ignoringOtherApps: true)
+        DispatchQueue.main.async {
+            NSApplication.shared.activate(ignoringOtherApps: true)
+        }
     }
 
     public func updateDockActivationPolicy() {

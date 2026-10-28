@@ -300,7 +300,7 @@ private struct AboutSettingsTab: View {
                 HStack {
                     Text(state.language == .vi ? "Tác giả:" : "Developer:")
                         .font(.system(size: 12, weight: .semibold))
-                    Text("Huỳnh Tuấn Huy (@tuanhuydev)")
+                    Text("Huỳnh Tuấn Huy (@lucifer208)")
                         .font(.system(size: 12))
                     Spacer()
                 }
@@ -308,8 +308,10 @@ private struct AboutSettingsTab: View {
                 HStack {
                     Text(state.language == .vi ? "Mã nguồn:" : "Source Code:")
                         .font(.system(size: 12, weight: .semibold))
-                    Link("github.com/tuanhuydev/MacNAP", destination: URL(string: "https://github.com/tuanhuydev/MacNAP")!)
-                        .font(.system(size: 12))
+                    if let url = URL(string: "https://github.com/lucifer208/MacNAP") {
+                        Link("github.com/lucifer208/MacNAP", destination: url)
+                            .font(.system(size: 12))
+                    }
                     Spacer()
                 }
 

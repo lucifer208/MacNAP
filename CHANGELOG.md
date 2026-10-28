@@ -2,6 +2,17 @@
 
 ## [1.0.1] - 2026-10-28
 
+### [15:58] fix(audit): fix smc connection lifecycle, menu activation and update author links
+- **Đóng kết nối AppleSMC an toàn (`SMCReader.swift`)**:
+  - Bổ sung `deinit` giải phóng cổng `IOServiceClose(connection)` tránh rò rỉ mach port.
+  - Tự động reset và tái tạo kết nối khi cổng SMC bị ngắt hoặc không phản hồi sau chu kỳ Sleep/Wake.
+- **Kích hoạt Menu Bar hệ thống chuẩn xác (`MacNAPApp.swift`)**:
+  - Chuyển `NSApp.activate` sang asynchronous main queue sau khi đổi `activationPolicy(.regular)` để menu bar của MacNAP luôn hiển thị chính xác thay vì bị đè bởi app khác.
+- **Đồng bộ liên kết tác giả & thông tin dự án (`SettingsView.swift`)**:
+  - Cập nhật đúng GitHub URL `@lucifer208/MacNAP` trong tab Giới thiệu.
+- **Biên dịch & Bundle bản mới nhất**:
+  - Loại bỏ hoàn toàn mục `Cài đặt` bị trùng lặp ở sidebar và làm mới tiến trình chạy thực tế.
+
 ### [14:57] docs: update README and README_EN with all 7 highlight features
 - **Cập nhật đầy đủ 7 tính năng nổi bật (`README.md` & `README_EN.md`)**:
   1. Auto-Unmount ổ ngoài khi Sleep / Gập nắp.

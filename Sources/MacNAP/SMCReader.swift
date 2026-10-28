@@ -55,7 +55,19 @@ public final class SMCReader {
         openConnection()
     }
 
+    deinit {
+        closeConnection()
+    }
+
+    private func closeConnection() {
+        if connection != 0 {
+            IOServiceClose(connection)
+            connection = 0
+        }
+    }
+
     private func openConnection() {
+        closeConnection()
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
         guard service != 0 else { return }
         defer { IOObjectRelease(service) }
@@ -88,7 +100,12 @@ public final class SMCReader {
         var outSize = MemoryLayout<SMCKeyData>.stride
 
         let krInfo = IOConnectCallStructMethod(connection, 2, &input, inSize, &output, &outSize)
-        guard krInfo == KERN_SUCCESS, output.keyInfo.dataSize > 0 else { return nil }
+        if krInfo != KERN_SUCCESS {
+            // Port dead or service disconnected
+            closeConnection()
+            return nil
+        }
+        guard output.keyInfo.dataSize > 0 else { return nil }
 
         let dataSize = output.keyInfo.dataSize
         let dataType = output.keyInfo.dataType
