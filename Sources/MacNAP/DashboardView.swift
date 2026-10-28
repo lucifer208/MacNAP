@@ -326,12 +326,13 @@ public struct DashboardView: View {
             Spacer()
 
             Button {
-                (NSApp.delegate as? MacNAPAppDelegate)?.openSettingsWindow()
+                state.openSettings()
             } label: {
                 Label(L.t("Cài đặt (⌘,)", "Settings (⌘,)"), systemImage: "gearshape.fill")
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
+            .keyboardShortcut(",", modifiers: .command)
 
             Button {
                 state.showReportSheet = true

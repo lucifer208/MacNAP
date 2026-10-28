@@ -327,8 +327,7 @@ public struct MenuBarPopoverView: View {
                     .foregroundStyle(.tertiary)
 
                 Button {
-                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                    NSApp.activate(ignoringOtherApps: true)
+                    state.openSettings()
                 } label: {
                     HStack(spacing: 3) {
                         Image(systemName: "gearshape")

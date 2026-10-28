@@ -155,6 +155,17 @@ public final class AppState: ObservableObject {
     @Published public var showReportSheet: Bool = false
     @Published public var lastActionLog: String = "Đang theo dõi công suất & thiết bị ngoại vi thời gian thực (1.0s)."
 
+    /// Handler mở cửa sổ Cài đặt
+    public var openSettingsHandler: (@MainActor () -> Void)?
+
+    public func openSettings() {
+        if let handler = openSettingsHandler {
+            handler()
+        } else {
+            NotificationCenter.default.post(name: Notification.Name("MacNAPOpenSettingsNotification"), object: nil)
+        }
+    }
+
     private let telemetry = PowerTelemetryService()
     private let guardService = SleepMountGuardService()
     private var timer: Timer?

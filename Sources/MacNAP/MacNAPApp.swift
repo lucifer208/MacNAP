@@ -4,13 +4,35 @@ import UserNotifications
 
 @MainActor
 public final class MacNAPAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+    public static private(set) weak var shared: MacNAPAppDelegate?
+
     public let state = AppState()
     public var statusBarController: StatusBarController?
     private var dashboardWindow: NSWindow?
     private var settingsWindow: NSWindow?
     private var deviceWindows: [String: NSWindow] = [:]
 
+    public override init() {
+        super.init()
+        Self.shared = self
+    }
+
     public func applicationDidFinishLaunching(_ notification: Notification) {
+        Self.shared = self
+        state.openSettingsHandler = { [weak self] in
+            self?.openSettingsWindow()
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: Notification.Name("MacNAPOpenSettingsNotification"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.openSettingsWindow()
+            }
+        }
+
         UserDefaults.standard.set(false, forKey: "NSQuitAlwaysKeepsWindows")
         // Đóng ngay bất kỳ cửa sổ nào macOS tự ý mở lúc khởi động (đặc biệt là Settings window)
         DispatchQueue.main.async {
@@ -93,22 +115,29 @@ public final class MacNAPAppDelegate: NSObject, NSApplicationDelegate, UNUserNot
     }
 
     public func openSettingsWindow() {
+        activateAppWithRegularPolicy()
         if let existing = settingsWindow {
             existing.makeKeyAndOrderFront(nil)
-            activateAppWithRegularPolicy()
+            existing.makeMain()
+            DispatchQueue.main.async {
+                NSApplication.shared.activate(ignoringOtherApps: true)
+            }
             return
         }
 
         let hosting = NSHostingController(rootView: SettingsView(state: state))
         let win = NSWindow(contentViewController: hosting)
         win.title = state.language == .vi ? "MacNAP — Cài đặt" : "MacNAP — Settings"
-        win.setContentSize(NSSize(width: 540, height: 440))
+        win.setContentSize(NSSize(width: 560, height: 490))
         win.styleMask = [.titled, .closable, .miniaturizable]
         win.isReleasedWhenClosed = false
         win.center()
         win.makeKeyAndOrderFront(nil)
+        win.makeMain()
         self.settingsWindow = win
-        activateAppWithRegularPolicy()
+        DispatchQueue.main.async {
+            NSApplication.shared.activate(ignoringOtherApps: true)
+        }
     }
 
     public func setupAppMainMenu() {

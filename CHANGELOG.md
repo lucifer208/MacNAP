@@ -2,6 +2,14 @@
 
 ## [1.0.1] - 2026-10-28
 
+### [16:12] fix(settings): resolve settings window trigger and automate timestamped versioning
+- **Sửa triệt để lỗi không mở được cửa sổ Cài đặt (`DashboardView.swift`, `AppState.swift`, `MacNAPApp.swift`, `MenuBarPopoverView.swift`)**:
+  - Gỡ bỏ ép kiểu `(NSApp.delegate as? MacNAPAppDelegate)` (bị nil do SwiftUI AppDelegateAdaptor bao bọc).
+  - Định tuyến mở cài đặt qua `state.openSettings()`, kết nối trực tiếp AppDelegate handler và `MacNAPAppDelegate.shared`.
+  - Hỗ trợ phím tắt `⌘,` trên cả Dashboard và MenuBar Popover.
+- **Tự động định dạng phiên bản `1.0.1.yymmddhhss` (`scripts/bundle.sh`, `VERSION`, `releases/latest.json`)**:
+  - Tự động gắn timestamp `yymmddhhss` (Năm 2 số, Tháng, Ngày, Giờ, Giây) sau mỗi lần fix và build.
+
 ### [15:58] fix(audit): fix smc connection lifecycle, menu activation and update author links
 - **Đóng kết nối AppleSMC an toàn (`SMCReader.swift`)**:
   - Bổ sung `deinit` giải phóng cổng `IOServiceClose(connection)` tránh rò rỉ mach port.

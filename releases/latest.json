@@ -1,10 +1,10 @@
 {
-  "version": "1.0.1",
-  "buildNumber": 101,
+  "version": "1.0.1.2610281618",
+  "buildNumber": 2610281618,
   "releaseDate": "2026-10-28",
-  "downloadURL": "https://github.com/lucifer208/MacNAP/releases/download/v1.0.1/MacNAP-v1.0.1.dmg",
-  "zipURL": "https://github.com/lucifer208/MacNAP/releases/download/v1.0.1/MacNAP-v1.0.1.zip",
-  "sourceURL": "https://github.com/lucifer208/MacNAP/releases/download/v1.0.1/MacNAP-v1.0.1-source.zip",
-  "releaseNotesVi": "Bản phát hành MacNAP v1.0.1: Tự động khởi động lại khi crash văng app (Crash Auto-Relaunch Watchdog), sửa triệt để lỗi Range crash biểu đồ, tách sạch các phiên ngủ thực tế, hỗ trợ đóng gói DMG và nguồn ZIP.",
-  "releaseNotesEn": "MacNAP v1.0.1: Automatic crash-recovery watchdog with auto-relaunch, crash-proof Swift Charts range scale, isolated overnight sleep sessions without AC noise, native DMG and source code packaging."
+  "downloadURL": "https://github.com/lucifer208/MacNAP/releases/download/v1.0.1.2610281618/MacNAP-v1.0.1.2610281618.dmg",
+  "zipURL": "https://github.com/lucifer208/MacNAP/releases/download/v1.0.1.2610281618/MacNAP-v1.0.1.2610281618.zip",
+  "sourceURL": "https://github.com/lucifer208/MacNAP/releases/download/v1.0.1.2610281618/MacNAP-v1.0.1.2610281618-source.zip",
+  "releaseNotesVi": "Bản cập nhật MacNAP v1.0.1.2610281618: Cố định hiển thị giao diện Cài đặt, tự động đánh số phiên bản theo timestamp yymmddhhss.",
+  "releaseNotesEn": "MacNAP v1.0.1.2610281618: Fixed settings window trigger and automated timestamped versioning."
 }

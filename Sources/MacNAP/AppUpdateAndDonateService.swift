@@ -73,6 +73,9 @@ public final class AppUpdaterService: @unchecked Sendable {
         if let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String, !v.isEmpty {
             return v
         }
+        if let localVer = try? String(contentsOfFile: "/Users/lu/HUB/MacNAP/VERSION", encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines), !localVer.isEmpty {
+            return localVer
+        }
         return "1.0.1"
     }()
 

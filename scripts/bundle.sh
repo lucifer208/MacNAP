@@ -1,8 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION_STR=$(tr -d '[:space:]' < VERSION 2>/dev/null || echo "1.0.1")
-BUILD_NUM="101"
+# Tự động tính timestamp yymmddhhss (Năm 2 số, Tháng, Ngày, Giờ, Giây)
+DATE_SUFFIX=$(date +"%y%m%d%H%S")
+BASE_VER="1.0.1"
+
+if [ -n "${1:-}" ]; then
+    VERSION_STR="$1"
+else
+    VERSION_STR="${BASE_VER}.${DATE_SUFFIX}"
+fi
+
+echo "${VERSION_STR}" > VERSION
+BUILD_NUM="${DATE_SUFFIX}"
 
 echo "==> Building MacNAP for production (v${VERSION_STR} Build ${BUILD_NUM})..."
 swift build -c release
@@ -74,6 +84,20 @@ rm -rf "$DMG_STAGING"
 echo "==> 3. Packaging Source Code ZIP: releases/MacNAP-v${VERSION_STR}-source.zip..."
 zip -r -q "releases/MacNAP-v${VERSION_STR}-source.zip" Sources scripts Package.swift README.md README_EN.md LICENSE CHANGELOG.md VERSION -x "*.DS_Store*"
 cp "releases/MacNAP-v${VERSION_STR}-source.zip" "releases/MacNAP-source.zip"
+
+echo "==> 4. Updating releases/latest.json..."
+cat > releases/latest.json <<EOF
+{
+  "version": "${VERSION_STR}",
+  "buildNumber": ${BUILD_NUM},
+  "releaseDate": "$(date +%Y-%m-%d)",
+  "downloadURL": "https://github.com/lucifer208/MacNAP/releases/download/v${VERSION_STR}/MacNAP-v${VERSION_STR}.dmg",
+  "zipURL": "https://github.com/lucifer208/MacNAP/releases/download/v${VERSION_STR}/MacNAP-v${VERSION_STR}.zip",
+  "sourceURL": "https://github.com/lucifer208/MacNAP/releases/download/v${VERSION_STR}/MacNAP-v${VERSION_STR}-source.zip",
+  "releaseNotesVi": "Bản cập nhật MacNAP v${VERSION_STR}: Cố định hiển thị giao diện Cài đặt, tự động đánh số phiên bản theo timestamp yymmddhhss.",
+  "releaseNotesEn": "MacNAP v${VERSION_STR}: Fixed settings window trigger and automated timestamped versioning."
+}
+EOF
 
 echo "--------------------------------------------------------"
 echo "Build and Packaging Complete!"
