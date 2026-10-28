@@ -2,6 +2,17 @@
 
 ## [Unreleased] - 2026-10-28
 
+### [11:01] feat: custom NSPopover Menu Bar UI, double-click Menu Bar to open Dashboard, VI/EN i18n & equal-height Bento KPI cards
+- **Thay thế Menu chuẩn của macOS bằng `NSPopover` Custom View (`MenuBarPopoverView.swift` & `StatusBarController.swift`)**:
+  - Loại bỏ hoàn toàn hiện tượng các dòng chữ bị xám mờ (`disabled`) của `NSMenu` mặc định.
+  - Đưa nút **"Mở Dashboard Phân tích" (`Open Analytics Dashboard`)** lên ngay đầu tiên trong Menu Bar Popover.
+  - Hỗ trợ **Double-click (nhấp đúp)** hoặc **Right-click** trực tiếp vào icon trên thanh Menu Bar để mở ngay cửa sổ Dashboard.
+- **Hệ thống đa ngôn ngữ `Tiếng Việt / English` (`Localization.swift`)**:
+  - Chuyển đổi tức thì `VI / EN` ngay trên Menu Bar Popover, Sidebar hoặc thanh công cụ của Dashboard (tự lưu vào `UserDefaults`).
+- **Làm lại 4 thẻ KPI đồng nhất chiều cao (`132pt`) & dự đoán pin dễ hiểu (`DashboardView.swift`)**:
+  - Cố định chiều cao 4 thẻ KPI bằng nhau tuyệt đối, có viền phát sáng nhẹ theo màu trạng thái và pill badge góc phải.
+  - Hiển thị dự đoán trực quan dễ hiểu: *"Chỉ mất ~1% Pin (`90% → ~89%`) • Giữ lại +9% pin mỗi đêm"* thay vì dải số âm khó đọc.
+
 ### [10:50] feat: Launch at Login, Hide Dock Icon toggle, MenuBar-only startup & NavigationSplitView UI redesign
 - **Khởi động cùng máy & Chạy ngầm chỉ hiện trên Menu Bar**:
   - Thêm nút **"Khởi động cùng máy tính (Login)"** (`SMAppService` + fallback `~/Library/LaunchAgents/com.lu.MacNAP.plist`).

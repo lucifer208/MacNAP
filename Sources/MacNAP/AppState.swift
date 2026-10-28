@@ -63,6 +63,24 @@ public final class AppState: ObservableObject {
     @Published public var remainingmAh: Int = 0
     @Published public var fullChargemAh: Int = 0
 
+    @Published public var language: AppLanguage = {
+        if let saved = UserDefaults.standard.string(forKey: "MacNAP_Language"),
+           let found = AppLanguage(rawValue: saved) {
+            return found
+        }
+        return .vi
+    }() {
+        didSet {
+            UserDefaults.standard.set(language.rawValue, forKey: "MacNAP_Language")
+        }
+    }
+
+    public var l10n: L10n { L10n(language) }
+
+    public func toggleLanguage() {
+        language = (language == .vi) ? .en : .vi
+    }
+
     @Published public var autoUnmountOnSleep: Bool = true
     @Published public var autoRemountOnWake: Bool = true
     @Published public var launchAtLogin: Bool = UserDefaults.standard.bool(forKey: "MacNAP_LaunchAtLogin") {
@@ -534,5 +552,18 @@ public final class AppState: ObservableObject {
         let hours = realLastNightDurationHours
         let deepSleepWh = 0.28 * hours
         return min(Double(realLastNightDropPercent), (deepSleepWh / totalBatteryWh) * 100.0)
+    }
+
+    /// Pin còn lại sáng hôm sau khi bật MacNAP (ví dụ: Bắt đầu ngủ 90%, chỉ mất 1.2% -> Sáng dậy còn 89%, giữ thêm +9% pin)
+    public var predictedWakeBatteryPercent: Int {
+        let startBat = currentSleepSession?.startBattery ?? 100
+        let drop = Int(round(predictedDropPercentWithFullGuard))
+        return max(0, startBat - max(1, drop))
+    }
+
+    public var predictedSavedPercentPoints: Int {
+        let actualDrop = realLastNightDropPercent
+        let newDrop = max(1, Int(round(predictedDropPercentWithFullGuard)))
+        return max(1, actualDrop - newDrop)
     }
 }
