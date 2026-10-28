@@ -250,3 +250,4 @@ public final class AppDiagnosticLogger {
         log(.info, component: "Logger", message: "Đã xoá sạch nhật ký hoạt động theo yêu cầu người dùng.")
     }
 }
+

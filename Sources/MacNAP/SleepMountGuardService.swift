@@ -310,12 +310,32 @@ public final class SleepMountGuardService {
             }
 
             let usingAC = line.contains("Using AC")
-            var reason = "System Sleep"
-            if let dueRange = line.range(of: #"due to ([^:]+)"#, options: .regularExpression) {
-                reason = String(line[dueRange]).replacingOccurrences(of: "due to ", with: "").trimmingCharacters(in: .whitespaces)
+            var reason = "System Sleep / CloseLid"
+            if let dueRange = line.range(of: #"due to (.+?)(?=\s+Using\s+(?:BATT|Batt|AC)|$)"#, options: .regularExpression) {
+                var rawReason = String(line[dueRange])
+                    .replacingOccurrences(of: "due to ", with: "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if rawReason.hasSuffix(":") {
+                    rawReason.removeLast()
+                }
+                if rawReason.contains("ATC0.USBWakeup") {
+                    reason = "Thiết bị Ngoại vi USB đánh thức máy (\(rawReason))"
+                } else if rawReason.contains("rtc/SleepService") {
+                    reason = "Tác vụ ngầm macOS SleepService (\(rawReason))"
+                } else if rawReason.contains("rtc/Maintenance") {
+                    reason = "Bảo trì ngầm định kỳ (\(rawReason))"
+                } else if rawReason.contains("wifibt") || rawReason.contains("OutboxNotEmpty") {
+                    reason = "Tín hiệu mạng Wi-Fi / Bluetooth ngầm (\(rawReason))"
+                } else if rawReason.contains("Clamshell Sleep") {
+                    reason = "Gập nắp máy (Clamshell / CloseLid Sleep)"
+                } else if rawReason.contains("Sleep Service Back to Sleep") || rawReason.contains("Maintenance Sleep") {
+                    reason = "Quay lại trạng thái ngủ sau khi thức ngầm (\(rawReason))"
+                } else {
+                    reason = rawReason
+                }
             }
             if line.contains("TCPKeepAlive=active") && !reason.contains("TCPKeepAlive") {
-                reason += " [TCPKeepAlive=active]"
+                reason += " • [TCPKeepAlive=active]"
             }
 
             parsedEvents.append(

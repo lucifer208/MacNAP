@@ -39,7 +39,13 @@ public final class AppState: ObservableObject {
     }
     @Published public var sleepSessions: [SleepSessionSummary] = []
     @Published public var dailySleepSessions: [SleepSessionSummary] = []
-    @Published public var selectedSessionID: UUID?
+    @Published public var selectedSessionID: UUID? {
+        didSet {
+            if let current = currentSleepSession {
+                selectedTimelineEvent = current.events.first(where: { $0.kind == .darkWake }) ?? current.events.first
+            }
+        }
+    }
     @Published public var selectedTimelineEvent: SleepTimelineEvent?
     @Published public var isLoadingPmsetLog: Bool = false
 
@@ -524,16 +530,24 @@ public final class AppState: ObservableObject {
     private func syncSelectedSessionForCurrentMode() {
         let list = activeSleepSessionList
         if selectedSessionID == nil || !list.contains(where: { $0.id == selectedSessionID }) {
-            // Ưu tiên chọn phiên có mức sụt pin đáng kể nhất (ví dụ -20%) hoặc phiên đầu tiên
-            if let mostSignificant = list.max(by: { $0.dropPercent < $1.dropPercent }), mostSignificant.dropPercent > 0 {
-                selectedSessionID = mostSignificant.id
-                selectedTimelineEvent = mostSignificant.events.first(where: { $0.kind == .darkWake }) ?? mostSignificant.events.first
-            } else if let first = list.first {
-                selectedSessionID = first.id
-                selectedTimelineEvent = first.events.first
+            // Ưu tiên phiên ngủ gần nhất có sụt pin >= 2% (VD đêm qua 27/10 22:51 -> 28/10 09:25 mất -20%)
+            if let recent = list.first(where: { $0.dropPercent >= 2 }) ?? list.first {
+                selectedSessionID = recent.id
+                selectedTimelineEvent = recent.events.first(where: { $0.kind == .darkWake }) ?? recent.events.first
             }
         } else if let current = currentSleepSession {
             selectedTimelineEvent = current.events.first(where: { $0.kind == .darkWake }) ?? current.events.first
+        }
+    }
+
+    public func stepTimelineEvent(delta: Int) {
+        guard let session = currentSleepSession, !session.events.isEmpty else { return }
+        if let currentEv = selectedTimelineEvent,
+           let idx = session.events.firstIndex(where: { $0.id == currentEv.id }) {
+            let nextIdx = max(0, min(session.events.count - 1, idx + delta))
+            selectedTimelineEvent = session.events[nextIdx]
+        } else {
+            selectedTimelineEvent = session.events.first
         }
     }
 

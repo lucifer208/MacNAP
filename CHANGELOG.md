@@ -2,6 +2,16 @@
 
 ## [Unreleased] - 2026-10-28
 
+### [11:55] feat: redesign Sleep Aid timeline card, comparison pills, bottom DarkWake tick strip & interactive event inspector
+- **Thiết kế lại bố cục Header & Điều khiển của Biểu đồ Phiên Ngủ (`DashboardView.swift`)**:
+  - **Hàng 1**: Tách riêng cụm Tiêu đề + Mô tả bên trái và bộ chuyển chế độ (`Theo lần Sleep / CloseLid` | `Theo Ngày (Từ 00:00)`) cố định kích thước + nút `Đọc lại log` bên phải, chấm dứt hoàn toàn lỗi đè chữ lên nhau.
+  - **Hàng 2**: Đặt Menu chọn phiên ngủ (`Menu`) gọn đẹp bên trái và 3 huy hiệu so sánh trực quan (`Thực tế chưa bật App`, `Khi bật Auto-Unmount`, `Auto-Unmount + Chặn DarkWake`) bên phải, loại bỏ hoàn toàn lỗi hiển thị ký tự `**` Markdown thô.
+- **Làm sạch Biểu đồ Đường & Vạch DarkWake (`DashboardView.swift`, `AppState.swift`)**:
+  - Thay thế hơn 80 đường kẻ dọc màu cam kéo kín chiều cao biểu đồ (gây rối mắt như "song sắt") bằng **Dải Tick DarkWake 10% ở đáy biểu đồ** kết hợp duy nhất **1 đường gióng Crosshair dọc** tại điểm sự kiện đang chọn.
+  - Mặc định chọn ngay **phiên ngủ gần nhất có hao pin** (`27/10 22:51 → 28/10 09:25 • -20%`) thay vì nhảy về phiên cũ nhất.
+- **Thanh Chi tiết Sự kiện (Event Inspector) có nút điều hướng `◀` / `▶` (`DashboardView.swift`, `SleepMountGuardService.swift`)**:
+  - Bổ sung bộ nút chuyển nhanh từng mốc sự kiện (`◀` / `▶` kèm bộ đếm `Sự kiện X/Y`), làm sạch chuỗi nguyên nhân đánh thức máy (`triggerReason`) không còn bị cắt cụt ở `Using BATT (Charge`, kèm giải thích tiếng Việt/Anh rõ ràng cho `ATC0.USBWakeup`, `SleepService`, `SMC.OutboxNotEmpty`.
+
 ### [11:44] feat: redesign Power & Assertions Log tab + add persistent Activity & Signal Crash Logger (`AppDiagnosticLogger`)
 - **Hệ thống tự tạo File Log Hoạt động & Bẫy lỗi Văng App (`AppDiagnosticLogger.swift`)**:
   - Tự động ghi log đồng bộ (`synchronize`) xuống `/Users/lu/HUB/MacNAP/logs/macnap-activity.log` và `~/Library/Logs/MacNAP/macnap-activity.log` (hỗ trợ xoay vòng file log `rotate` khi vượt quá 2MB).

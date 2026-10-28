@@ -556,40 +556,47 @@ public struct DashboardView: View {
     private var sleepAidTimelineSection: some View {
         let L = state.l10n
         let activeList = state.activeSleepSessionList
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                Label(
-                    L.t(
-                        "Biểu đồ Phiên Ngủ Thực Tế kiểu Sleep Aid (Sleep / CloseLid)",
-                        "Sleep Aid Interactive Timeline (Sleep / CloseLid)"
-                    ),
-                    systemImage: "moon.stars.fill"
-                )
-                .font(.headline)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
+        return VStack(alignment: .leading, spacing: 14) {
+            // Row 1: Title + Mode Switcher + Reload Button (No collision)
+            HStack(spacing: 12) {
+                HStack(spacing: 8) {
+                    Image(systemName: "moon.stars.fill")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.cyan)
+                        .frame(width: 28, height: 28)
+                        .background(Color.cyan.opacity(0.14), in: RoundedRectangle(cornerRadius: 7))
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(
+                            L.t(
+                                "Biểu đồ Phiên Ngủ Thực Tế kiểu Sleep Aid (Sleep / CloseLid)",
+                                "Sleep Aid Interactive Timeline (Sleep / CloseLid)"
+                            )
+                        )
+                        .font(.headline)
+                        .lineLimit(1)
+
+                        Text(
+                            L.t(
+                                "Nhấn vào biểu đồ hoặc dùng nút ◀ ▶ bên dưới để soi chi tiết từng lần thức ngầm (DarkWake)",
+                                "Click anywhere on the chart or use ◀ ▶ buttons below to inspect each DarkWake event"
+                            )
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    }
+                }
 
                 Spacer()
 
-                // Segmented Toggle: Theo lần Sleep / CloseLid vs Theo Ngày (Từ 00:00)
                 Picker("", selection: $state.sleepAnalysisMode) {
                     Text(L.t("Theo lần Sleep / CloseLid", "By Sleep / CloseLid")).tag(SleepAnalysisMode.bySession)
                     Text(L.t("Theo Ngày (Từ 00:00)", "By Day (From 00:00)")).tag(SleepAnalysisMode.byDay)
                 }
                 .labelsHidden()
                 .pickerStyle(.segmented)
-                .frame(width: 270)
-
-                if !activeList.isEmpty {
-                    Picker("", selection: $state.selectedSessionID) {
-                        ForEach(activeList) { session in
-                            Text("\(session.titleLabel) (-\(session.dropPercent)% • \(session.darkWakeCount) DarkWake)")
-                                .tag(Optional(session.id))
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(width: 265)
-                }
+                .fixedSize(horizontal: true, vertical: false)
 
                 Button {
                     state.refreshWakeLogs()
@@ -601,7 +608,7 @@ public struct DashboardView: View {
                             Text(L.t("Đang đọc...", "Loading..."))
                         }
                     } else {
-                        Text(L.t("Đọc lại log", "Reload log"))
+                        Label(L.t("Đọc lại log", "Reload log"), systemImage: "arrow.clockwise")
                     }
                 }
                 .disabled(state.isLoadingPmsetLog)
@@ -612,28 +619,70 @@ public struct DashboardView: View {
             if let session = state.currentSleepSession {
                 let wakeWithApp = max(0, session.startBattery - max(1, Int(round(state.predictedDropPercentWithFullGuard))))
                 let wakeAutoUnmount = max(0, session.startBattery - max(1, Int(round(state.predictedDropPercentWithAutoUnmount))))
+                let autoUnmountDrop = max(1, session.startBattery - wakeAutoUnmount)
+                let fullGuardDrop = max(1, session.startBattery - wakeWithApp)
 
-                HStack(spacing: 16) {
-                    Text(L.t("Phiên ngủ: **\(session.titleLabel)** (\(String(format: "%.1fh", session.durationHours)))", "Session: **\(session.titleLabel)** (\(String(format: "%.1fh", session.durationHours)))"))
-                    Text(L.t("Thực tế chưa bật App: **\(session.startBattery)% → \(session.endBattery)% (Mất -\(session.dropPercent)%)**", "Actual Unprotected: **\(session.startBattery)% → \(session.endBattery)% (-\(session.dropPercent)%)**"))
-                        .foregroundStyle(.red)
-                    Text(L.t("Nếu bật Auto-Unmount: **Còn ~\(wakeAutoUnmount)%**", "With Auto-Unmount: **~\(wakeAutoUnmount)% left**"))
-                        .foregroundStyle(.green)
-                    Text(L.t("Nếu bật Auto-Unmount + Tắt DarkWake: **Còn ~\(wakeWithApp)% (Chỉ mất ~1%)**", "With Full Guard: **~\(wakeWithApp)% left (~1% loss)**"))
-                        .foregroundStyle(.cyan)
+                // Row 2: Session Dropdown + 3 Clean Comparison Pill Cards
+                HStack(spacing: 10) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "calendar.badge.clock")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        Text(L.t("Phiên ngủ:", "Session:"))
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        if !activeList.isEmpty {
+                            Picker("", selection: $state.selectedSessionID) {
+                                ForEach(activeList) { item in
+                                    Text("\(item.titleLabel) (\(String(format: "%.1fh", item.durationHours)) • -\(item.dropPercent)% • \(item.darkWakeCount) DarkWake)")
+                                        .tag(Optional(item.id))
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .frame(maxWidth: 320)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 9))
+
                     Spacer()
+
+                    sleepScenarioPill(
+                        dotColor: .cyan,
+                        title: L.t("Thực tế (Chưa bật App)", "Actual (Unprotected)"),
+                        value: "\(session.startBattery)% → \(session.endBattery)% (-\(session.dropPercent)%)",
+                        valueColor: .red
+                    )
+
+                    sleepScenarioPill(
+                        dotColor: .green,
+                        title: L.t("Khi bật Auto-Unmount", "With Auto-Unmount"),
+                        value: L.t("Còn ~\(wakeAutoUnmount)% (-\(autoUnmountDrop)%)", "~\(wakeAutoUnmount)% left (-\(autoUnmountDrop)%)"),
+                        valueColor: .green
+                    )
+
+                    sleepScenarioPill(
+                        dotColor: .mint,
+                        title: L.t("Auto-Unmount + Chặn DarkWake", "Full Guard (No DarkWake)"),
+                        value: L.t("Còn ~\(wakeWithApp)% (-\(fullGuardDrop)%)", "~\(wakeWithApp)% left (-\(fullGuardDrop)%)"),
+                        valueColor: .mint
+                    )
                 }
-                .font(.caption)
 
                 let minBat = max(0, session.endBattery - 5)
                 let maxBat = min(100, session.startBattery + 2)
                 let totalSpan = max(1.0, session.endTime.timeIntervalSince(session.startTime))
+                let tickHeight = max(2, Int(Double(maxBat - minBat) * 0.10))
 
+                // Row 3: Clean Interactive Chart (No chaotic prison bars)
                 Chart {
                     ForEach(session.events) { ev in
                         let progress = max(0.0, min(1.0, ev.timestamp.timeIntervalSince(session.startTime) / totalSpan))
                         let predictedAutoUnmountPct = Double(session.startBattery) - (progress * state.predictedDropPercentWithAutoUnmount)
                         let predictedFullGuardPct = Double(session.startBattery) - (progress * state.predictedDropPercentWithFullGuard)
+                        let isSelected = (selectedTimelineEventID == ev.id)
 
                         AreaMark(
                             x: .value("Time", ev.timestamp),
@@ -642,7 +691,7 @@ public struct DashboardView: View {
                         )
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [.cyan.opacity(0.24), .cyan.opacity(0.02)],
+                                colors: [.cyan.opacity(0.22), .cyan.opacity(0.02)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -654,7 +703,7 @@ public struct DashboardView: View {
                             series: .value("Scenario", "Actual")
                         )
                         .foregroundStyle(.cyan)
-                        .lineStyle(StrokeStyle(lineWidth: 2.5))
+                        .lineStyle(StrokeStyle(lineWidth: 2.6))
 
                         LineMark(
                             x: .value("Time", ev.timestamp),
@@ -662,7 +711,7 @@ public struct DashboardView: View {
                             series: .value("Scenario", "Auto-Unmount")
                         )
                         .foregroundStyle(.green)
-                        .lineStyle(StrokeStyle(lineWidth: 2.2, dash: [6, 3]))
+                        .lineStyle(StrokeStyle(lineWidth: 2.0, dash: [6, 4]))
 
                         LineMark(
                             x: .value("Time", ev.timestamp),
@@ -672,24 +721,36 @@ public struct DashboardView: View {
                         .foregroundStyle(.mint)
                         .lineStyle(StrokeStyle(lineWidth: 2.0, dash: [3, 3]))
 
+                        // Thanh vạch nhỏ gọn ở đáy biểu đồ thể hiện mật độ DarkWake mà không che khuất đường Pin
                         if ev.kind != .sleep {
+                            RuleMark(
+                                x: .value("Time", ev.timestamp),
+                                yStart: .value("TickStart", minBat),
+                                yEnd: .value("TickEnd", minBat + tickHeight)
+                            )
+                            .foregroundStyle(ev.kind == .darkWake ? Color.orange.opacity(0.55) : Color.red.opacity(0.75))
+                            .lineStyle(StrokeStyle(lineWidth: 1.5))
+                        }
+
+                        // Chỉ vẽ đường gióng thẳng đứng (Crosshair) cho đúng sự kiện đang được chọn
+                        if isSelected {
                             RuleMark(x: .value("Time", ev.timestamp))
-                                .foregroundStyle(ev.kind == .darkWake ? Color.orange.opacity(0.75) : Color.red)
-                                .lineStyle(StrokeStyle(lineWidth: selectedTimelineEventID == ev.id ? 3.0 : 1.5))
+                                .foregroundStyle(ev.kind == .darkWake ? Color.orange : Color.cyan)
+                                .lineStyle(StrokeStyle(lineWidth: 2.2, dash: [4, 3]))
 
                             PointMark(
                                 x: .value("Time", ev.timestamp),
                                 y: .value("Actual (%)", ev.batteryPercent)
                             )
-                            .symbolSize(selectedTimelineEventID == ev.id ? 110 : 55)
-                            .foregroundStyle(ev.kind == .darkWake ? .orange : .red)
-                        } else {
+                            .symbolSize(130)
+                            .foregroundStyle(ev.kind == .darkWake ? .orange : (ev.kind == .fullWake ? .red : .cyan))
+                        } else if ev.kind != .sleep {
                             PointMark(
                                 x: .value("Time", ev.timestamp),
                                 y: .value("Actual (%)", ev.batteryPercent)
                             )
-                            .symbolSize(selectedTimelineEventID == ev.id ? 90 : 30)
-                            .foregroundStyle(.cyan)
+                            .symbolSize(28)
+                            .foregroundStyle(ev.kind == .darkWake ? Color.orange.opacity(0.85) : Color.red)
                         }
                     }
                 }
@@ -702,7 +763,7 @@ public struct DashboardView: View {
                     }
                 }
                 .chartYAxisLabel("% Pin")
-                .frame(height: 195)
+                .frame(height: 205)
                 .chartOverlay { proxy in
                     GeometryReader { geo in
                         Rectangle()
@@ -722,42 +783,92 @@ public struct DashboardView: View {
                     }
                 }
 
+                // Row 4: Clean Structured Event Inspector Bar
                 if let ev = state.selectedTimelineEvent {
-                    HStack(alignment: .top, spacing: 14) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 8) {
-                                Text(ev.kind.rawValue.uppercased())
-                                    .font(.caption.bold())
+                    let curIndex = (session.events.firstIndex(where: { $0.id == ev.id }) ?? 0) + 1
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 10) {
+                            Text(ev.kind.rawValue.uppercased())
+                                .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 3)
+                                .background((ev.kind == .darkWake ? Color.orange : (ev.kind == .fullWake ? Color.red : Color.cyan)).opacity(0.2), in: Capsule())
+                                .foregroundStyle(ev.kind == .darkWake ? .orange : (ev.kind == .fullWake ? .red : .cyan))
+
+                            Label(ev.dateLabel, systemImage: "clock.fill")
+                                .font(.system(size: 12.5, weight: .bold, design: .monospaced))
+
+                            Text(L.t("Pin \(ev.batteryPercent)%", "Bat \(ev.batteryPercent)%"))
+                                .font(.system(size: 11.5, weight: .bold, design: .monospaced))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2.5)
+                                .background(Color.green.opacity(0.16), in: Capsule())
+                                .foregroundStyle(.green)
+
+                            if ev.durationSeconds > 0 {
+                                Text(L.t("Thức ngầm: \(ev.durationSeconds) giây", "Awake: \(ev.durationSeconds)s"))
+                                    .font(.system(size: 11, weight: .medium))
                                     .padding(.horizontal, 8)
-                                    .padding(.vertical, 2)
-                                    .background((ev.kind == .darkWake ? Color.orange : (ev.kind == .fullWake ? Color.red : Color.cyan)).opacity(0.2), in: Capsule())
-                                    .foregroundStyle(ev.kind == .darkWake ? .orange : (ev.kind == .fullWake ? .red : .cyan))
-
-                                Text(L.t("Thời điểm: \(ev.dateLabel)", "Timestamp: \(ev.dateLabel)"))
-                                    .font(.subheadline.bold().monospacedDigit())
-
-                                Text(L.t("• Pin: \(ev.batteryPercent)%", "• Battery: \(ev.batteryPercent)%"))
-                                    .font(.subheadline.bold())
-                                    .foregroundStyle(.green)
-
-                                if ev.durationSeconds > 0 {
-                                    Text(L.t("• Thức: \(ev.durationSeconds) giây", "• Duration: \(ev.durationSeconds)s"))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
+                                    .padding(.vertical, 2.5)
+                                    .background(Color.primary.opacity(0.07), in: Capsule())
+                                    .foregroundStyle(.secondary)
                             }
-                            Text(L.t("Nguyên nhân đánh thức máy: \(ev.triggerReason)", "Wake Trigger: \(ev.triggerReason)"))
-                                .font(.caption.bold())
-                                .foregroundStyle(.primary)
-                            Text("Raw pmset log: \(ev.rawLine)")
-                                .font(.caption2.monospaced())
+
+                            Spacer()
+
+                            Text(L.t("Sự kiện \(curIndex)/\(session.events.count)", "Event \(curIndex)/\(session.events.count)"))
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
                                 .foregroundStyle(.secondary)
-                                .lineLimit(2)
+
+                            HStack(spacing: 4) {
+                                Button {
+                                    state.stepTimelineEvent(delta: -1)
+                                } label: {
+                                    Image(systemName: "chevron.left")
+                                        .font(.system(size: 11, weight: .bold))
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+
+                                Button {
+                                    state.stepTimelineEvent(delta: 1)
+                                } label: {
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 11, weight: .bold))
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                            }
                         }
-                        Spacer()
+
+                        HStack(spacing: 8) {
+                            Image(systemName: "bolt.horizontal.circle.fill")
+                                .foregroundStyle(ev.kind == .darkWake ? .orange : .cyan)
+                            Text(L.t("Nguyên nhân:", "Trigger:"))
+                                .font(.system(size: 11.5, weight: .bold))
+                                .foregroundStyle(.secondary)
+                            Text(ev.triggerReason)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                            Spacer()
+                        }
+
+                        HStack(spacing: 6) {
+                            Text("pmset:")
+                                .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                            Text(ev.rawLine)
+                                .font(.system(size: 10.5, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .textSelection(.enabled)
+                            Spacer()
+                        }
                     }
                     .padding(12)
-                    .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
+                    .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 11))
                 }
             } else {
                 Text(L.t("Đang phân tích dữ liệu phiên ngủ từ pmset log ở luồng ngầm...", "Parsing sleep sessions from pmset log in background..."))
@@ -767,6 +878,32 @@ public struct DashboardView: View {
         }
         .padding(16)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func sleepScenarioPill(
+        dotColor: Color,
+        title: String,
+        value: String,
+        valueColor: Color
+    ) -> some View {
+        HStack(spacing: 7) {
+            Circle()
+                .fill(dotColor)
+                .frame(width: 8, height: 8)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Text(value)
+                    .font(.system(size: 11.5, weight: .bold, design: .monospaced))
+                    .foregroundStyle(valueColor)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 9))
     }
 
     private var selectedTimelineEventID: UUID? {
