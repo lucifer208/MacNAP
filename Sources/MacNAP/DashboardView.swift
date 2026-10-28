@@ -40,6 +40,9 @@ public struct DashboardView: View {
         .sheet(isPresented: $state.showDonateSheet) {
             DonateSheetView(state: state)
         }
+        .sheet(isPresented: $state.showReportSheet) {
+            ReportIssueSheetView(state: state)
+        }
     }
 
     // MARK: - Sidebar Navigation
@@ -318,24 +321,11 @@ public struct DashboardView: View {
             Spacer()
 
             Button {
-                if case .updateAvailable(let manifest) = state.updateStatus {
-                    state.performSelfUpdateNow(manifest: manifest)
-                } else {
-                    state.checkForUpdates(silentIfUpToDate: false)
-                }
+                state.showReportSheet = true
             } label: {
-                Label(sidebarUpdateButtonTitle, systemImage: "arrow.triangle.2.circlepath")
+                Label(L.t("Báo cáo lỗi / Góp ý", "Report Issue"), systemImage: "ladybug.fill")
             }
             .buttonStyle(.bordered)
-            .controlSize(.small)
-
-            Button {
-                state.showDonateSheet = true
-            } label: {
-                Label(L.t("Ủng hộ (Donate)", "Donate"), systemImage: "heart.fill")
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.pink)
             .controlSize(.small)
 
             HStack(spacing: 6) {

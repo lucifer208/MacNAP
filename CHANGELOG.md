@@ -2,6 +2,17 @@
 
 ## [Unreleased] - 2026-10-28
 
+### [12:38] fix: remove duplicate update/donate buttons, add Report Issue sheet & allow custom user donate info with real VietQR
+- **Xoá trùng lặp nút Update & Donate (`DashboardView.swift`, `MenuBarPopoverView.swift`)**:
+  - Gỡ bỏ hoàn toàn nút kiểm tra update và donate bị trùng ở thanh Toolbar trên cùng.
+  - Thanh Toolbar trên cùng giờ chỉ giữ lại nút **`Báo cáo lỗi / Góp ý`** và bộ chọn ngôn ngữ, tập trung nút Update & Donate tại thanh Sidebar và Menu Bar.
+- **Bổ sung Cửa sổ Báo cáo Lỗi & Chẩn đoán (`ReportIssueSheetView` trong `AppUpdateAndDonateService.swift`, `AppState.swift`)**:
+  - Tổng hợp sẵn toàn bộ thông số phần cứng, chip CPU, macOS, công suất live, thiết bị ngoại vi, tiến trình chặn sleep, trích xuất log gần nhất và đường dẫn file log.
+  - Hỗ trợ nút **Copy toàn bộ báo cáo chẩn đoán** và mở trực tiếp trang GitHub Issues.
+- **Tự do nhập & lưu thông tin Donate cá nhân kèm tạo mã VietQR thực tế (`DonateConfig`, `DonateSheetView`)**:
+  - Không hardcode bất kỳ link hay mã QR nào. Cho phép người dùng tự nhập: **Ngân hàng (chọn từ danh sách ngân hàng Việt Nam)**, **Số tài khoản (STK)**, **Tên chủ tài khoản**, **Nội dung chuyển khoản mặc định** hoặc **Link Donate cá nhân (MoMo, PayPal, Buy Me a Coffee)**.
+  - Dữ liệu được lưu vĩnh viễn (`UserDefaults`). Hệ thống tự động tạo mã **VietQR thực tế** theo đúng STK + Ngân hàng vừa nhập và hiển thị nút sao chép STK nhanh.
+
 ### [12:05] feat: official Release v1.0.0, redesign Sidebar Power box, remove AppleSMC/Sleep Aid jargon, add Check Update / Auto-Update & Donate modal
 - **Phát hành phiên bản chính thức `v1.0.0` (`VERSION`, `scripts/bundle.sh`, `releases/latest.json`)**:
   - Thiết lập chuẩn `CFBundleShortVersionString = 1.0.0` (Build `100`), tự động đóng gói bản phát hành `releases/MacNAP-v1.0.0.zip` và manifest `releases/latest.json`.

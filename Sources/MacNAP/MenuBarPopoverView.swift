@@ -320,6 +320,25 @@ public struct MenuBarPopoverView: View {
                 }
                 .buttonStyle(.plain)
 
+                Button {
+                    onOpenDashboard()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        state.showReportSheet = true
+                    }
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "ladybug.fill")
+                            .font(.system(size: 9.5))
+                        Text(L.t("Báo lỗi", "Report"))
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(Color.orange.opacity(0.18), in: Capsule())
+                    .foregroundStyle(.orange)
+                }
+                .buttonStyle(.plain)
+
                 Spacer()
 
                 Button(L.quitApp) {

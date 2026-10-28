@@ -123,6 +123,7 @@ public final class AppState: ObservableObject {
         }
     }
     @Published public var showDonateSheet: Bool = false
+    @Published public var showReportSheet: Bool = false
     @Published public var lastActionLog: String = "Đang theo dõi công suất & thiết bị ngoại vi thời gian thực (1.0s)."
 
     private let telemetry = PowerTelemetryService()
