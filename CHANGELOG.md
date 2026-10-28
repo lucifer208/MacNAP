@@ -2,6 +2,16 @@
 
 ## [1.0.1] - 2026-10-28
 
+### [14:57] docs: update README and README_EN with all 7 highlight features
+- **Cập nhật đầy đủ 7 tính năng nổi bật (`README.md` & `README_EN.md`)**:
+  1. Auto-Unmount ổ ngoài khi Sleep / Gập nắp.
+  2. Auto-Remount 2 đợt khi Wake / Mở nắp.
+  3. Chặn thức ngầm DarkWake khi dùng Pin.
+  4. Auto Low Power Mode khi gập nắp trên Pin.
+  5. Săn "Kẻ trộm giấc ngủ" (Sleep Insomnia Hunter).
+  6. Báo động Tụt Pin Sáng Dậy (Morning Drain Alert).
+  7. Biểu đồ Phân tích Pin & Đo công suất SMC 1.0s.
+
 ### [14:52] ci: add GitHub Actions automated release pipeline & create tag v1.0.1
 - **Tự động hóa phát hành bản mới (`.github/workflows/release.yml`)**:
   - Tích hợp CI/CD tự động chạy trên macOS-14 (Apple Silicon).
