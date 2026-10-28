@@ -13,7 +13,7 @@ public struct DashboardView: View {
     public var body: some View {
         NavigationSplitView {
             sidebarView
-                .navigationSplitViewColumnWidth(min: 235, ideal: 250, max: 270)
+                .navigationSplitViewColumnWidth(min: 265, ideal: 275, max: 295)
         } detail: {
             VStack(spacing: 0) {
                 topStatusToolbar
@@ -77,58 +77,123 @@ public struct DashboardView: View {
 
             Divider()
 
+            // Grouped & Perfectly Aligned Sidebar Footer
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Label("System Total", systemImage: "bolt.fill")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                    Spacer()
-                    Text(String(format: "%.2f W", state.systemLoadWatts))
-                        .font(.caption.monospacedDigit().bold())
+                // Cluster 1: Live Power Telemetry
+                VStack(spacing: 6) {
+                    sidebarMetricRow(
+                        icon: "bolt.fill",
+                        color: .orange,
+                        label: "System Total",
+                        value: String(format: "%.2f W", state.systemLoadWatts)
+                    )
+                    sidebarMetricRow(
+                        icon: "powerplug.fill",
+                        color: .green,
+                        label: "DC In",
+                        value: String(format: "%.2f W", state.externalConnected ? state.adapterWatts : 0.0)
+                    )
+                    sidebarMetricRow(
+                        icon: "battery.75percent",
+                        color: .cyan,
+                        label: L.t("Pin hiện tại", "Battery"),
+                        value: "\(state.batteryPercent)% (\(state.remainingmAh)mAh)"
+                    )
                 }
+                .padding(10)
+                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
 
-                HStack {
-                    Label("DC In", systemImage: "powerplug.fill")
-                        .font(.caption)
-                        .foregroundStyle(.green)
-                    Spacer()
-                    Text(String(format: "%.2f W", state.externalConnected ? state.adapterWatts : 0.0))
-                        .font(.caption.monospacedDigit().bold())
+                // Cluster 2: Bảo vệ Ngủ & Ổ ngoài (Sleep & Drive Guard)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(L.groupSleepGuard)
+                        .font(.system(size: 9.5, weight: .bold))
+                        .foregroundStyle(.secondary)
+
+                    sidebarToggleRow(title: L.autoUnmountSleep, isOn: $state.autoUnmountOnSleep)
+                    sidebarToggleRow(title: L.autoRemountWake, isOn: $state.autoRemountOnWake)
+                    sidebarActionToggleRow(
+                        title: L.disableDarkWakeBattery,
+                        isOn: state.disableDarkWakeOnBattery,
+                        isLoading: state.isUpdatingDarkWake
+                    ) { newValue in
+                        state.setDarkWakeDisabled(newValue)
+                    }
                 }
+                .padding(10)
+                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
 
-                HStack {
-                    Label(L.t("Pin hiện tại", "Battery"), systemImage: "battery.75percent")
-                        .font(.caption)
-                        .foregroundStyle(.cyan)
-                    Spacer()
-                    Text("\(state.batteryPercent)% (\(state.remainingmAh) mAh)")
-                        .font(.caption.monospacedDigit().bold())
+                // Cluster 3: Hệ thống & Giao diện (System & Interface)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(L.groupSystemPrefs)
+                        .font(.system(size: 9.5, weight: .bold))
+                        .foregroundStyle(.secondary)
+
+                    sidebarToggleRow(title: L.launchAtLogin, isOn: $state.launchAtLogin)
+                    sidebarToggleRow(title: L.hideDockIcon, isOn: $state.hideDockIcon)
                 }
-
-                Divider()
-
-                Toggle(L.launchAtLogin, isOn: $state.launchAtLogin)
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    .font(.caption)
-
-                Toggle(L.hideDockIcon, isOn: $state.hideDockIcon)
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    .font(.caption)
-
-                Toggle(L.autoUnmountSleep, isOn: $state.autoUnmountOnSleep)
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    .font(.caption)
-
-                Toggle(L.autoRemountWake, isOn: $state.autoRemountOnWake)
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    .font(.caption)
+                .padding(10)
+                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
             }
-            .padding(14)
+            .padding(12)
             .background(.ultraThinMaterial)
+        }
+    }
+
+    private func sidebarMetricRow(icon: String, color: Color, label: String, value: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(color)
+                .frame(width: 16, alignment: .center)
+            Text(label)
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(value)
+                .font(.system(size: 11.5, weight: .bold, design: .monospaced))
+                .foregroundStyle(.primary)
+        }
+    }
+
+    private func sidebarToggleRow(title: String, isOn: Binding<Bool>) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 11.5))
+                .lineLimit(1)
+            Spacer()
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+        }
+    }
+
+    private func sidebarActionToggleRow(
+        title: String,
+        isOn: Bool,
+        isLoading: Bool,
+        onToggle: @escaping (Bool) -> Void
+    ) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 11.5))
+                .lineLimit(1)
+            Spacer()
+            if isLoading {
+                ProgressView()
+                    .controlSize(.mini)
+            } else {
+                Toggle(
+                    "",
+                    isOn: Binding(
+                        get: { isOn },
+                        set: { onToggle($0) }
+                    )
+                )
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+            }
         }
     }
 

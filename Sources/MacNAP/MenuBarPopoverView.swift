@@ -206,12 +206,47 @@ public struct MenuBarPopoverView: View {
 
             Divider()
 
-            // 5. Compact Switches
-            VStack(alignment: .leading, spacing: 6) {
-                compactToggleRow(title: L.autoUnmountSleep, isOn: $state.autoUnmountOnSleep)
-                compactToggleRow(title: L.autoRemountWake, isOn: $state.autoRemountOnWake)
-                compactToggleRow(title: L.launchAtLogin, isOn: $state.launchAtLogin)
-                compactToggleRow(title: L.hideDockIcon, isOn: $state.hideDockIcon)
+            // 5. Grouped Switches (Sleep Guard vs System)
+            VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(L.groupSleepGuard)
+                        .font(.system(size: 9.5, weight: .bold))
+                        .foregroundStyle(.secondary)
+                    compactToggleRow(title: L.autoUnmountSleep, isOn: $state.autoUnmountOnSleep)
+                    compactToggleRow(title: L.autoRemountWake, isOn: $state.autoRemountOnWake)
+                    HStack {
+                        Text(L.disableDarkWakeBattery)
+                            .font(.system(size: 11.5))
+                        Spacer()
+                        if state.isUpdatingDarkWake {
+                            ProgressView()
+                                .controlSize(.mini)
+                        } else {
+                            Toggle(
+                                "",
+                                isOn: Binding(
+                                    get: { state.disableDarkWakeOnBattery },
+                                    set: { state.setDarkWakeDisabled($0) }
+                                )
+                            )
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .controlSize(.mini)
+                        }
+                    }
+                }
+                .padding(8)
+                .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(L.groupSystemPrefs)
+                        .font(.system(size: 9.5, weight: .bold))
+                        .foregroundStyle(.secondary)
+                    compactToggleRow(title: L.launchAtLogin, isOn: $state.launchAtLogin)
+                    compactToggleRow(title: L.hideDockIcon, isOn: $state.hideDockIcon)
+                }
+                .padding(8)
+                .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
             }
 
             Divider()

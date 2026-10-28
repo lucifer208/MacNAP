@@ -2,6 +2,17 @@
 
 ## [Unreleased] - 2026-10-28
 
+### [11:11] feat: align all toggle switches right, group settings into clusters & add direct DarkWake blocker toggle
+- **Căn thẳng hàng tuyệt đối toàn bộ công tắc (`Toggle`) & icon thông số ở Sidebar và Menu Bar Popover**:
+  - Sửa lỗi `Toggle("Label")` mặc định của SwiftUI làm lệch vị trí nút gạt theo độ dài chữ: Tách thành `HStack { Text(title); Spacer(); Toggle("", isOn: ...).labelsHidden() }` để tất cả các công tắc thẳng tắp một cột bên phải, icon thông số cố định `frame(width: 16)`.
+- **Chia rõ từng cụm tính năng (`Card Clusters`)**:
+  1. **Cụm 1 (Live Telemetry)**: `System Total`, `DC In`, `Pin hiện tại`.
+  2. **Cụm 2 (`BẢO VỆ NGỦ & Ổ NGOÀI` / `SLEEP & DRIVE GUARD`)**: `Tự Unmount khi gập nắp`, `Tự Mount khi mở nắp`, `Chặn DarkWake (Pin)`.
+  3. **Cụm 3 (`HỆ THỐNG & GIAO DIỆN` / `SYSTEM & INTERFACE`)**: `Khởi động cùng macOS`, `Ẩn icon trên thanh Dock`.
+- **Thêm nút bật/tắt trực tiếp `Chặn DarkWake (Pin)` (`SleepMountGuardService.swift`)**:
+  - Đọc trạng thái thật từ `pmset -g custom` (`tcpkeepalive` & `powernap` ở mục `Battery Power`).
+  - Khi gạt công tắc sẽ mở hộp thoại xác thực quyền Admin chuẩn của macOS để chạy `/usr/bin/pmset -b tcpkeepalive 0 powernap 0 womp 0 ttyskeepawake 0` (hoặc khôi phục về `1` khi tắt).
+
 ### [11:05] feat: add Sleep Analysis Mode switcher (By Sleep Session vs By Day from 00:00)
 - **Thêm bộ chuyển đổi chế độ xem phiên ngủ (`SleepAnalysisMode`: Theo lần Sleep vs Theo Ngày từ `00:00`)**:
   - **Theo lần Sleep (`By Sleep Session`)**: Tính từ lúc gập nắp bắt đầu ngủ đến lúc mở máy (`FullWake`), gộp trọn vẹn cả đêm ngủ (`100% → 80%`, mất `-20%`).

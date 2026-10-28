@@ -89,6 +89,8 @@ public final class AppState: ObservableObject {
 
     @Published public var autoUnmountOnSleep: Bool = true
     @Published public var autoRemountOnWake: Bool = true
+    @Published public var disableDarkWakeOnBattery: Bool = false
+    @Published public var isUpdatingDarkWake: Bool = false
     @Published public var launchAtLogin: Bool = UserDefaults.standard.bool(forKey: "MacNAP_LaunchAtLogin") {
         didSet {
             UserDefaults.standard.set(launchAtLogin, forKey: "MacNAP_LaunchAtLogin")
@@ -112,6 +114,7 @@ public final class AppState: ObservableObject {
     public init() {
         applyDockVisibilityPolicy()
         setupSleepWakeObservers()
+        syncDarkWakeSettingState()
         refreshAll()
         refreshWakeLogs()
         actionHistory.append(
@@ -532,6 +535,48 @@ public final class AppState: ObservableObject {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(cmd, forType: .string)
         lastActionLog = "Đã copy lệnh chống rò pin ban đêm: \(cmd)"
+    }
+
+    public func syncDarkWakeSettingState() {
+        let guardRef = guardService
+        Task {
+            let disabled = await Task.detached(priority: .utility) {
+                guardRef.isDarkWakeDisabledOnBattery()
+            }.value
+            self.disableDarkWakeOnBattery = disabled
+        }
+    }
+
+    public func setDarkWakeDisabled(_ targetValue: Bool) {
+        guard !isUpdatingDarkWake else { return }
+        isUpdatingDarkWake = true
+        let guardRef = guardService
+        lastActionLog = targetValue
+            ? "Đang yêu cầu quyền Admin để tắt DarkWake & TCPKeepAlive..."
+            : "Đang yêu cầu quyền Admin để bật lại DarkWake mặc định..."
+
+        Task {
+            let res = await Task.detached(priority: .userInitiated) {
+                guardRef.setDisableDarkWakeOnBattery(targetValue)
+            }.value
+            let actual = await Task.detached(priority: .utility) {
+                guardRef.isDarkWakeDisabledOnBattery()
+            }.value
+
+            self.isUpdatingDarkWake = false
+            self.disableDarkWakeOnBattery = actual
+            self.lastActionLog = res.message
+            self.actionHistory.insert(
+                SleepGuardLogEntry(
+                    timestamp: Date(),
+                    action: targetValue ? "Block DarkWake" : "Restore DarkWake",
+                    target: "pmset -b tcpkeepalive/powernap",
+                    success: res.success,
+                    detail: res.message
+                ),
+                at: 0
+            )
+        }
     }
 
     public var totalBatteryWh: Double {

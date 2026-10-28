@@ -575,4 +575,63 @@ public final class SleepMountGuardService {
     public func buildZeroDrainTerminalCommand() -> String {
         "sudo pmset -b tcpkeepalive 0 powernap 0 womp 0 proximitywake 0 ttyskeepawake 0 hibernatemode 25"
     }
+
+    /// Kiểm tra xem chế độ Chặn DarkWake trên Pin (`tcpkeepalive 0` & `powernap 0`) đã được bật hay chưa
+    public func isDarkWakeDisabledOnBattery() -> Bool {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")
+        proc.arguments = ["-g", "custom"]
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = pipe
+
+        do {
+            try proc.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            proc.waitUntilExit()
+            let out = String(data: data, encoding: .utf8) ?? ""
+            guard let batSection = out.components(separatedBy: "AC Power:").first else { return false }
+            let tcpOff = batSection.contains("tcpkeepalive         0") || batSection.range(of: #"tcpkeepalive\s+0"#, options: .regularExpression) != nil
+            let pnapOff = batSection.contains("powernap             0") || batSection.range(of: #"powernap\s+0"#, options: .regularExpression) != nil
+            return tcpOff && pnapOff
+        } catch {
+            return false
+        }
+    }
+
+    /// Bật/tắt trực tiếp Chặn DarkWake trên Pin qua hộp thoại cấp quyền chuẩn macOS (`with administrator privileges`)
+    public func setDisableDarkWakeOnBattery(_ disable: Bool) -> (success: Bool, message: String) {
+        let shellCmd: String
+        if disable {
+            shellCmd = "/usr/bin/pmset -b tcpkeepalive 0 powernap 0 womp 0 ttyskeepawake 0"
+        } else {
+            shellCmd = "/usr/bin/pmset -b tcpkeepalive 1 powernap 1 ttyskeepawake 1"
+        }
+
+        let appleScript = "do shell script \"\(shellCmd)\" with administrator privileges"
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        proc.arguments = ["-e", appleScript]
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = pipe
+
+        do {
+            try proc.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            proc.waitUntilExit()
+            let out = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if proc.terminationStatus == 0 {
+                return (
+                    true,
+                    disable
+                        ? "Đã tắt DarkWake & TCPKeepAlive khi dùng Pin (pmset -b tcpkeepalive 0 powernap 0)."
+                        : "Đã khôi phục mặc định DarkWake khi dùng Pin (pmset -b tcpkeepalive 1 powernap 1)."
+                )
+            }
+            return (false, out.isEmpty ? "Đã huỷ cấp quyền quản trị." : out)
+        } catch {
+            return (false, error.localizedDescription)
+        }
+    }
 }

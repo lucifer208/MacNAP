@@ -42,10 +42,15 @@ public struct L10n {
     public var quitApp: String { t("Thoát MacNAP", "Quit MacNAP") }
 
     // Toggles
-    public var launchAtLogin: String { t("Khởi động cùng máy (Login)", "Launch at Login") }
+    public var launchAtLogin: String { t("Khởi động cùng macOS", "Launch at Login") }
     public var hideDockIcon: String { t("Ẩn icon trên thanh Dock", "Hide Dock Icon") }
-    public var autoUnmountSleep: String { t("Tự Unmount khi gập nắp / ngủ", "Auto-Unmount on Sleep") }
-    public var autoRemountWake: String { t("Tự Mount lại ngay khi mở nắp", "Auto-Remount on Wake") }
+    public var autoUnmountSleep: String { t("Tự Unmount khi gập nắp", "Auto-Unmount on Sleep") }
+    public var autoRemountWake: String { t("Tự Mount khi mở nắp", "Auto-Remount on Wake") }
+    public var disableDarkWakeBattery: String { t("Chặn DarkWake (Pin)", "Block DarkWake (Batt)") }
+
+    // Group Titles
+    public var groupSleepGuard: String { t("BẢO VỆ NGỦ & Ổ NGOÀI", "SLEEP & DRIVE GUARD") }
+    public var groupSystemPrefs: String { t("HỆ THỐNG & GIAO DIỆN", "SYSTEM & INTERFACE") }
 
     // KPI Titles
     public var kpiSystemTotal: String { t("CÔNG SUẤT TIÊU THỤ (SYSTEM TOTAL)", "SYSTEM TOTAL POWER") }
