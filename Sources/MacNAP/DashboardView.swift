@@ -1036,6 +1036,11 @@ public struct DashboardView: View {
                     .padding(12)
                     .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 11))
                 }
+
+                // Row 5: Bóc tách tác nhân hao pin khi ngủ (Sleep Culprits Breakdown)
+                if session.dropPercent > 0 {
+                    sleepCulpritsBreakdownView(session: session)
+                }
             } else {
                 Text(L.t("Đang phân tích dữ liệu phiên ngủ từ pmset log ở luồng ngầm...", "Parsing sleep sessions from pmset log in background..."))
                     .font(.caption)
@@ -1044,6 +1049,109 @@ public struct DashboardView: View {
         }
         .padding(16)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func culpritColor(_ name: String) -> Color {
+        switch name {
+        case "orange": return .orange
+        case "indigo": return .indigo
+        case "amber": return .yellow
+        case "teal": return .mint
+        default: return .cyan
+        }
+    }
+
+    private func sleepCulpritsBreakdownView(session: SleepSessionSummary) -> some View {
+        let L = state.l10n
+        let hasPeriph = state.peripherals.count > 0 || session.usbWakeCount > 0
+        let culprits = session.calculateCulprits(hasPeripherals: hasPeriph)
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: "flame.fill")
+                    .foregroundStyle(.orange)
+                    .font(.system(size: 13, weight: .bold))
+                Text(L.t("Bóc tách tác nhân hao pin phiên này (-\(session.dropPercent)% Pin)", "Sleep Drain Culprits Breakdown (-\(session.dropPercent)% Bat)"))
+                    .font(.system(size: 13, weight: .bold))
+
+                Spacer()
+
+                if !state.disableDarkWakeOnBattery {
+                    Button {
+                        state.setDarkWakeDisabled(true)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "bolt.slash.fill")
+                            Text(L.t("Chặn DarkWake ngay", "Block DarkWake Now"))
+                        }
+                        .font(.system(size: 11, weight: .semibold))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.orange)
+                    .controlSize(.small)
+                }
+            }
+
+            // Visual Segmented Proportional Bar
+            GeometryReader { geo in
+                HStack(spacing: 3) {
+                    ForEach(culprits) { c in
+                        let w = max(4.0, (geo.size.width - CGFloat(max(1, culprits.count - 1)) * 3) * (CGFloat(c.sharePercentage) / 100.0))
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(culpritColor(c.colorName))
+                            .frame(width: w, height: 8)
+                    }
+                }
+            }
+            .frame(height: 8)
+
+            // 4 Breakdown Cards Grid
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                ForEach(culprits) { c in
+                    let col = culpritColor(c.colorName)
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Image(systemName: c.icon)
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(col)
+                            Text(state.language == .vi ? c.nameVi : c.nameEn)
+                                .font(.system(size: 11.5, weight: .bold))
+                                .lineLimit(1)
+                            Spacer()
+                            Text("-\(String(format: "%.1f", c.dropPercent))%")
+                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .foregroundStyle(col)
+                            Text("(\(c.sharePercentage)%)")
+                                .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        HStack(spacing: 6) {
+                            Text(c.eventCountText)
+                                .font(.system(size: 10, weight: .bold))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(col.opacity(0.14), in: Capsule())
+                                .foregroundStyle(col)
+
+                            Text(state.language == .vi ? c.explanationVi : c.explanationEn)
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+
+                        Text("💡 " + (state.language == .vi ? c.recommendationVi : c.recommendationEn))
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary.opacity(0.8))
+                            .lineLimit(1)
+                    }
+                    .padding(10)
+                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 9))
+                }
+            }
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 11))
     }
 
     private func sleepScenarioPill(

@@ -2,6 +2,16 @@
 
 ## [1.0.1] - 2026-10-28
 
+### [18:44] feat(sleep-aid): add sleep battery drain culprits breakdown cards & proportional bar
+- **Bóc tách nguyên nhân đốt pin khi Sleep / CloseLid (`DashboardView.swift`, `Models.swift`)**:
+  - Tự động phân loại 4 tác nhân chính:
+    1. Cổng USB & Thiết bị Ngoại vi (Hub / SSD): Cấp nguồn 5V bus và ngắt phần cứng `ATC0.USBWakeup`.
+    2. Sóng Wi-Fi & Gói mạng IP ngầm: Card Wi-Fi duy trì nhận gói IP khi chưa tắt `tcpkeepalive`.
+    3. Tác vụ bảo trì ngầm macOS: Apple RTC timer chạy `SleepService` / `Maintenance Sleep` đồng bộ iCloud/Mail.
+    4. Tiêu thụ phần cứng tự nhiên: Dòng điện tối thiểu duy trì RAM Self-Refresh & SMC chip Apple Silicon.
+  - Hiển thị thanh tỷ lệ màu trực quan (Segmented Bar) kèm số % hao pin và % tỷ trọng cụ thể của từng tác nhân.
+  - Tích hợp nút hành động nhanh "Chặn DarkWake ngay" khi phát hiện phiên ngủ bị thức dậy bởi mạng ngầm.
+
 ### [16:12] fix(settings): resolve settings window trigger and automate timestamped versioning
 - **Sửa triệt để lỗi không mở được cửa sổ Cài đặt (`DashboardView.swift`, `AppState.swift`, `MacNAPApp.swift`, `MenuBarPopoverView.swift`)**:
   - Gỡ bỏ ép kiểu `(NSApp.delegate as? MacNAPAppDelegate)` (bị nil do SwiftUI AppDelegateAdaptor bao bọc).

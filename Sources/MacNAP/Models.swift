@@ -72,6 +72,114 @@ public struct SleepSessionSummary: Identifiable, Hashable {
     public let usbWakeCount: Int
     public let tcpKeepAliveActive: Bool
     public let events: [SleepTimelineEvent]
+
+    public var usbWakeEvents: [SleepTimelineEvent] {
+        events.filter { $0.triggerReason.contains("USB") || $0.rawLine.contains("USBWakeup") }
+    }
+
+    public var wifiWakeEvents: [SleepTimelineEvent] {
+        events.filter { $0.rawLine.contains("wifibt") || $0.rawLine.contains("E_RX_IP_PACKET") || $0.rawLine.contains("ARPT") }
+    }
+
+    public var maintenanceWakeEvents: [SleepTimelineEvent] {
+        events.filter { $0.rawLine.contains("SleepService") || $0.rawLine.contains("Maintenance") }
+    }
+
+    public func calculateCulprits(hasPeripherals: Bool = true) -> [SleepCulpritBreakdown] {
+        let totalDrop = Double(max(0, dropPercent))
+        guard totalDrop > 0 else { return [] }
+
+        let usbWakes = max(usbWakeCount, usbWakeEvents.count)
+        let wifiWakes = wifiWakeEvents.count
+        let maintWakes = maintenanceWakeEvents.count
+        let dur = max(0.5, durationHours)
+
+        let rawUsbWh = (Double(usbWakes) * 0.12) + (hasPeripherals ? dur * 0.55 : 0.0)
+        let rawWifiWh = (Double(wifiWakes) * 0.08) + (tcpKeepAliveActive ? dur * 0.35 : 0.05)
+        let rawMaintWh = (Double(maintWakes) * 0.05) + (dur * 0.15)
+        let rawBaseWh = dur * 0.12
+
+        let sumRaw = max(0.01, rawUsbWh + rawWifiWh + rawMaintWh + rawBaseWh)
+        let usbPct = (rawUsbWh / sumRaw) * totalDrop
+        let wifiPct = (rawWifiWh / sumRaw) * totalDrop
+        let maintPct = (rawMaintWh / sumRaw) * totalDrop
+        let basePct = max(0.0, totalDrop - (usbPct + wifiPct + maintPct))
+
+        let usbShare = max(1, Int(round((usbPct / totalDrop) * 100)))
+        let wifiShare = max(1, Int(round((wifiPct / totalDrop) * 100)))
+        let maintShare = max(1, Int(round((maintPct / totalDrop) * 100)))
+        let baseShare = max(0, 100 - (usbShare + wifiShare + maintShare))
+
+        return [
+            SleepCulpritBreakdown(
+                nameVi: "Cổng USB & Ngoại vi (Hub / SSD)",
+                nameEn: "USB Bus & Peripherals",
+                icon: "cable.connector.horizontal",
+                colorName: "orange",
+                dropPercent: usbPct,
+                sharePercentage: usbShare,
+                eventCountText: "\(usbWakes) lần USBWakeup",
+                explanationVi: "Cổng Type-C cấp nguồn 5V cho Hub/SSD ngoài và nhận tín hiệu đánh thức máy.",
+                explanationEn: "Type-C ports supply 5V bus power to Hubs/SSDs and trigger wake interrupts.",
+                recommendationVi: "Bật Auto-Unmount ổ đĩa & ngắt hub không sử dụng.",
+                recommendationEn: "Enable Auto-Unmount and detach unused hubs."
+            ),
+            SleepCulpritBreakdown(
+                nameVi: "Sóng Wi-Fi & Gói mạng IP (TCPKeepAlive)",
+                nameEn: "Wi-Fi & TCPKeepAlive DarkWake",
+                icon: "wifi.exclamationmark",
+                colorName: "indigo",
+                dropPercent: wifiPct,
+                sharePercentage: wifiShare,
+                eventCountText: "\(wifiWakes) lần nhận gói IP",
+                explanationVi: "Card Wi-Fi bật ngầm nhận gói mạng khiến CPU giật mình thức giấc liên tục.",
+                explanationEn: "Wi-Fi radio remains powered to receive network packets, waking the CPU.",
+                recommendationVi: "Bật Chặn DarkWake trên MacNAP để tắt TCPKeepAlive khi dùng Pin.",
+                recommendationEn: "Enable Block DarkWake in MacNAP to turn off TCPKeepAlive on battery."
+            ),
+            SleepCulpritBreakdown(
+                nameVi: "Tác vụ bảo trì macOS (SleepService)",
+                nameEn: "macOS Maintenance Sleep",
+                icon: "gearshape.2.fill",
+                colorName: "amber",
+                dropPercent: maintPct,
+                sharePercentage: maintShare,
+                eventCountText: "\(maintWakes) lần SleepService",
+                explanationVi: "Apple RTC tự hẹn giờ chạy ngầm bảo trì iCloud, Mail, Spotlight và PowerNap.",
+                explanationEn: "Apple RTC timer wakes Mac periodically for iCloud, Mail, Spotlight sync.",
+                recommendationVi: "Tắt PowerNap khi dùng pin (được tối ưu trong Chặn DarkWake).",
+                recommendationEn: "Disable Power Nap on battery (included in Block DarkWake)."
+            ),
+            SleepCulpritBreakdown(
+                nameVi: "Tiêu thụ phần cứng tự nhiên (Deep Sleep)",
+                nameEn: "Hardware Standby Base Drain",
+                icon: "shield.checkered",
+                colorName: "teal",
+                dropPercent: basePct,
+                sharePercentage: baseShare,
+                eventCountText: "\(String(format: "%.1fh", dur)) Sleep sâu",
+                explanationVi: "Dòng điện tối thiểu duy trì RAM Self-Refresh và chip SMC của Apple Silicon.",
+                explanationEn: "Minimal power required to maintain RAM Self-Refresh and Apple Silicon SMC.",
+                recommendationVi: "Mức tiêu thụ tự nhiên lý tưởng của chip Apple Silicon.",
+                recommendationEn: "Normal expected standby consumption of hardware."
+            )
+        ]
+    }
+}
+
+public struct SleepCulpritBreakdown: Identifiable, Hashable {
+    public let id = UUID()
+    public let nameVi: String
+    public let nameEn: String
+    public let icon: String
+    public let colorName: String
+    public let dropPercent: Double
+    public let sharePercentage: Int
+    public let eventCountText: String
+    public let explanationVi: String
+    public let explanationEn: String
+    public let recommendationVi: String
+    public let recommendationEn: String
 }
 
 public enum PeripheralKind: String, CaseIterable, Codable {
