@@ -2,6 +2,19 @@
 
 ## [Unreleased] - 2026-10-28
 
+### [13:13] feat(release): add comprehensive README.md, package source zip & release via DMG
+- **Khởi tạo tài liệu dự án `README.md` chuyên nghiệp**:
+  - Giới thiệu chi tiết giải pháp trị dứt điểm chứng tụt pin qua đêm cho MacBook khi dùng ổ cứng ngoài, hub và dock Thunderbolt.
+  - Bảng tổng hợp tính năng (Auto-Unmount/Remount, Telemetry 1.0s, Apple SMC, Hardware Profiling 140W, Wake Blocker Detection, GitHub Updater & Issues, VietQR VPBank).
+  - Hướng dẫn cài đặt chi tiết qua file `.dmg` (kéo thả `/Applications`) và `.zip`.
+  - Hướng dẫn build từ mã nguồn với Swift Package Manager.
+  - Sơ đồ cấu trúc cây thư mục mã nguồn và thông tin tác giả Huỳnh Tuấn Huy (`@lucifer208`).
+- **Tạo giấy phép mã nguồn `LICENSE` (MIT License)**.
+- **Nâng cấp kịch bản đóng gói `scripts/bundle.sh`**:
+  - Tạo bộ cài đặt đĩa ảnh macOS DMG: `releases/MacNAP-v1.0.0.dmg` (kèm symlink kéo thả tiện lợi vào `/Applications`) và `releases/MacNAP.dmg`.
+  - Đóng gói toàn bộ mã nguồn sạch: `releases/MacNAP-v1.0.0-source.zip` và `releases/MacNAP-source.zip`.
+  - Cập nhật thông tin tải tệp trong `releases/latest.json`.
+
 ### [13:10] fix(ui): redesign MenuBar popover footer with equal-width action buttons and dedicated quit bar
 - **Thiết kế lại toàn bộ cụm 4 nút chân trang MenuBar (`MenuBarPopoverView.swift`)**:
   - Khắc phục triệt để hiện tượng chữ bị ép xuống 2 dòng (`Cập \n nhật`) do thiếu không gian ngang:
