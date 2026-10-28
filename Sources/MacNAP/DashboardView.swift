@@ -55,15 +55,13 @@ public struct DashboardView: View {
             HStack(spacing: 12) {
                 SleepingMacIconView(size: 40)
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text("MacNAP")
                             .font(.title3.bold())
                         Text("v\(state.appVersion)")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.cyan.opacity(0.16), in: Capsule())
-                            .foregroundStyle(.cyan)
+                            .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                     Text(L.t("Quản lý Nguồn & Bảo vệ Pin", "Power & Sleep Battery Guard"))
                         .font(.caption2)
@@ -158,15 +156,9 @@ public struct DashboardView: View {
 
                 // Cluster 3: Hệ thống, Cập nhật & Ủng hộ (System, Update & Donate)
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text(L.groupSystemPrefs)
-                            .font(.system(size: 9.5, weight: .bold))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text("v\(state.appVersion)")
-                            .font(.system(size: 9.5, weight: .bold, design: .monospaced))
-                            .foregroundStyle(.cyan)
-                    }
+                    Text(L.groupSystemPrefs)
+                        .font(.system(size: 9.5, weight: .bold))
+                        .foregroundStyle(.secondary)
 
                     sidebarToggleRow(title: L.launchAtLogin, isOn: $state.launchAtLogin)
                     sidebarToggleRow(title: L.hideDockIcon, isOn: $state.hideDockIcon)
@@ -296,7 +288,7 @@ public struct DashboardView: View {
         case .installing:
             return L.t("Đang cập nhật...", "Updating...")
         case .upToDate:
-            return L.t("Bản mới nhất v\(state.appVersion)", "Up to date v\(state.appVersion)")
+            return L.t("Đã là bản mới nhất", "Up to date")
         default:
             return L.t("Kiểm tra Update", "Check Update")
         }
@@ -307,16 +299,8 @@ public struct DashboardView: View {
         let L = state.l10n
         return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 8) {
-                    Text(L.sectionTitle(state.selectedSection))
-                        .font(.headline)
-                    Text("Release v\(state.appVersion)")
-                        .font(.system(size: 10.5, weight: .bold, design: .monospaced))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 2)
-                        .background(Color.green.opacity(0.16), in: Capsule())
-                        .foregroundStyle(.green)
-                }
+                Text(L.sectionTitle(state.selectedSection))
+                    .font(.headline)
                 Text(state.lastActionLog)
                     .font(.caption)
                     .foregroundStyle(.secondary)

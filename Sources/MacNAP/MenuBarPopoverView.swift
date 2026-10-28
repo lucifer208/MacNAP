@@ -20,31 +20,37 @@ public struct MenuBarPopoverView: View {
         let L = state.l10n
         VStack(alignment: .leading, spacing: 12) {
             // 1. Header + Primary CTA: Open Dashboard AT THE TOP
-            HStack(spacing: 10) {
-                SleepingMacIconView(size: 32)
+            HStack(spacing: 8) {
+                SleepingMacIconView(size: 28)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("MacNAP Guard")
+                    Text("MacNAP")
                         .font(.system(size: 14, weight: .bold))
-                    Text(L.t("Double-click thanh Menu để mở nhanh", "Double-click Menu Bar to open"))
-                        .font(.system(size: 10))
+                    Text(L.t("Double-click thanh Menu để mở", "Double-click Menu Bar to open"))
+                        .font(.system(size: 9.5))
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-                Spacer()
+                Spacer(minLength: 4)
 
-                // Language dropdown menu (Tiếng Việt / English)
-                Picker("", selection: $state.language) {
-                    ForEach(AppLanguage.allCases) { lang in
-                        Text(lang.rawValue).tag(lang)
+                // Compact VI/EN language toggle button
+                Button {
+                    state.language = (state.language == .vi ? .en : .vi)
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "globe")
+                            .font(.system(size: 9))
+                        Text(state.language == .vi ? "VI" : "EN")
+                            .font(.system(size: 9.5, weight: .bold))
                     }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 5))
                 }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .controlSize(.small)
-                .frame(width: 98)
+                .buttonStyle(.plain)
 
                 Text("\(state.batteryPercent)%")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .padding(.horizontal, 8)
+                    .font(.system(size: 11.5, weight: .bold, design: .monospaced))
+                    .padding(.horizontal, 7)
                     .padding(.vertical, 3)
                     .background(Color.green.opacity(0.18), in: Capsule())
                     .foregroundStyle(.green)
@@ -82,19 +88,13 @@ public struct MenuBarPopoverView: View {
                     miniMetricBox(
                         icon: "bolt.fill",
                         color: .orange,
-                        label: L.t(
-                            String(format: "Tiêu thụ (Ngoại vi %.2fW)", state.peripheralsTotalWatts),
-                            String(format: "Load (Periph %.2fW)", state.peripheralsTotalWatts)
-                        ),
+                        label: L.t("Tổng tiêu thụ", "Total Load"),
                         value: String(format: "%.2f W", state.systemLoadWatts)
                     )
                     miniMetricBox(
                         icon: "powerplug.fill",
                         color: .green,
-                        label: L.t(
-                            "Sạc vào (Max \(state.macMaxSupportedWatts)W)",
-                            "Power In (Max \(state.macMaxSupportedWatts)W)"
-                        ),
+                        label: L.t("Nguồn sạc vào", "Power In"),
                         value: String(format: "%.2f W", state.externalConnected ? state.adapterWatts : 0.0)
                     )
                 }
@@ -121,31 +121,34 @@ public struct MenuBarPopoverView: View {
             .controlSize(.small)
 
             if let s = state.currentSleepSession {
-                HStack(spacing: 8) {
-                    Image(systemName: "sparkles")
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "moon.stars.fill")
+                        .font(.system(size: 12))
                         .foregroundStyle(.cyan)
+                        .padding(.top, 2)
                     VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 4) {
+                            Text(s.titleLabel)
+                                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text(L.t("Mất -\(s.dropPercent)% (\(s.startBattery)% → \(s.endBattery)%)", "Lost -\(s.dropPercent)% (\(s.startBattery)% → \(s.endBattery)%)"))
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(s.dropPercent > 2 ? .orange : .cyan)
+                        }
+
                         Text(
                             L.t(
-                                "\(s.titleLabel): Mất -\(s.dropPercent)% (\(s.startBattery)%→\(s.endBattery)%)",
-                                "\(s.titleLabel): Lost -\(s.dropPercent)% (\(s.startBattery)%→\(s.endBattery)%)"
-                            )
-                        )
-                        .font(.system(size: 11, weight: .semibold))
-                        .lineLimit(1)
-                        Text(
-                            L.t(
-                                "Bật MacNAP chỉ mất ~1% (Còn ~\(state.predictedWakeBatteryPercent)%, giữ lại +\(state.predictedSavedPercentPoints)% pin)",
-                                "With MacNAP only ~1% loss (~\(state.predictedWakeBatteryPercent)% left, saves +\(state.predictedSavedPercentPoints)%)"
+                                "Bật MacNAP giữ lại +\(state.predictedSavedPercentPoints)% pin (chỉ mất ~1%)",
+                                "With MacNAP saves +\(state.predictedSavedPercentPoints)% battery (only ~1% drop)"
                             )
                         )
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                     }
-                    Spacer()
                 }
-                .padding(9)
+                .padding(8)
                 .background(Color.cyan.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
             }
 
@@ -258,15 +261,9 @@ public struct MenuBarPopoverView: View {
                 .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
 
                 VStack(alignment: .leading, spacing: 5) {
-                    HStack {
-                        Text(L.groupSystemPrefs)
-                            .font(.system(size: 9.5, weight: .bold))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text("v\(state.appVersion)")
-                            .font(.system(size: 9.5, weight: .bold, design: .monospaced))
-                            .foregroundStyle(.cyan)
-                    }
+                    Text(L.groupSystemPrefs)
+                        .font(.system(size: 9.5, weight: .bold))
+                        .foregroundStyle(.secondary)
                     compactToggleRow(title: L.launchAtLogin, isOn: $state.launchAtLogin)
                     compactToggleRow(title: L.hideDockIcon, isOn: $state.hideDockIcon)
                     compactToggleRow(

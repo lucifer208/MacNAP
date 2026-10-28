@@ -1,10 +1,10 @@
 {
-  "version": "1.0.1.2610281841",
-  "buildNumber": 2610281841,
+  "version": "1.0.1.2610281959",
+  "buildNumber": 2610281959,
   "releaseDate": "2026-10-28",
-  "downloadURL": "https://github.com/lucifer208/MacNAP/releases/download/v1.0.1.2610281841/MacNAP-v1.0.1.2610281841.dmg",
-  "zipURL": "https://github.com/lucifer208/MacNAP/releases/download/v1.0.1.2610281841/MacNAP-v1.0.1.2610281841.zip",
-  "sourceURL": "https://github.com/lucifer208/MacNAP/releases/download/v1.0.1.2610281841/MacNAP-v1.0.1.2610281841-source.zip",
-  "releaseNotesVi": "Bản cập nhật MacNAP v1.0.1.2610281841: Cố định hiển thị giao diện Cài đặt, tự động đánh số phiên bản theo timestamp yymmddhhss.",
-  "releaseNotesEn": "MacNAP v1.0.1.2610281841: Fixed settings window trigger and automated timestamped versioning."
+  "downloadURL": "https://github.com/lucifer208/MacNAP/releases/download/v1.0.1.2610281959/MacNAP-v1.0.1.2610281959.dmg",
+  "zipURL": "https://github.com/lucifer208/MacNAP/releases/download/v1.0.1.2610281959/MacNAP-v1.0.1.2610281959.zip",
+  "sourceURL": "https://github.com/lucifer208/MacNAP/releases/download/v1.0.1.2610281959/MacNAP-v1.0.1.2610281959-source.zip",
+  "releaseNotesVi": "Bản cập nhật MacNAP v1.0.1.2610281959: Cố định hiển thị giao diện Cài đặt, tự động đánh số phiên bản theo timestamp yymmddhhss.",
+  "releaseNotesEn": "MacNAP v1.0.1.2610281959: Fixed settings window trigger and automated timestamped versioning."
 }

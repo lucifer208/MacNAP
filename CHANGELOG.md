@@ -2,6 +2,16 @@
 
 ## [1.0.1] - 2026-10-28
 
+### [19:26] fix(ui): deduplicate version displays and redesign popover dropdown to eliminate text truncation
+- **Gom gọn hiển thị Version (chỉ hiện duy nhất 1 lần) (`DashboardView.swift`, `MenuBarPopoverView.swift`)**:
+  - Dashboard: Chỉ giữ phiên bản gọn gàng dưới tên MacNAP ở đầu Sidebar. Gỡ bỏ hoàn toàn huy hiệu `Release v...` ở tiêu đề trang, gỡ `v...` ở nhóm Hệ thống, đổi nút Cập nhật thành nhãn ngắn "Đã là bản mới nhất".
+  - MenuBar Popover: Chỉ hiển thị phiên bản ở thanh Footer dưới cùng. Gỡ bỏ `v...` ở nhóm Hệ thống.
+- **Thiết kế lại giao diện xổ xuống MenuBar không bị mất chữ (`MenuBarPopoverView.swift`, `StatusBarController.swift`)**:
+  - Mở rộng chiều ngang Popover lên 370px.
+  - Thay picker ngôn ngữ to cồng kềnh bằng nút chuyển đổi VI/EN nhỏ gọn, giữ nguyên toàn bộ chữ "MacNAP" và phụ đề không bị cắt ngắn `...`.
+  - Thiết kế lại 2 thẻ đo công suất (`Tổng tiêu thụ`, `Nguồn sạc vào`) với nhãn ngắn gọn, súc tích.
+  - Tách bố cục banner so sánh phiên ngủ thành 2 dòng (thời gian bên trái, mức tụt bên phải) tránh tràn dòng.
+
 ### [18:44] feat(sleep-aid): add sleep battery drain culprits breakdown cards & proportional bar
 - **Bóc tách nguyên nhân đốt pin khi Sleep / CloseLid (`DashboardView.swift`, `Models.swift`)**:
   - Tự động phân loại 4 tác nhân chính:
