@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "buildNumber": 100,
   "releaseDate": "2026-10-28",
-  "downloadURL": "https://github.com/lu/MacNAP/releases/download/v1.0.0/MacNAP-v1.0.0.zip",
+  "downloadURL": "https://github.com/lucifer208/MacNAP/releases/download/v1.0.0/MacNAP-v1.0.0.zip",
   "releaseNotesVi": "Phiên bản chính thức MacNAP v1.0.0: Tự động Unmount ổ cứng ngoài khi Sleep/CloseLid & Remount khi Wake/OpenLid, theo dõi công suất thời gian thực 1.0s, biểu đồ hao pin qua đêm, tự tạo file log chẩn đoán & bẫy lỗi crash.",
   "releaseNotesEn": "Official Release MacNAP v1.0.0: Auto-Unmount external drives on Sleep/CloseLid & Remount on Wake/OpenLid, 1.0s realtime power telemetry, interactive sleep battery timeline, and persistent crash-safe activity logger."
 }

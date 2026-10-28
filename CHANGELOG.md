@@ -2,6 +2,16 @@
 
 ## [Unreleased] - 2026-10-28
 
+### [12:57] fix: clean Donate modal UI & pills layout, format VND currency, load real VietQR image from VietQR server & configure GitHub URL
+- **Sửa triệt để giao diện Modal Donate & Nút mức tiền (`DonateSheetView` trong `AppUpdateAndDonateService.swift`)**:
+  - Tách chữ và emoji (`30.000đ ☕️`, `50.000đ 🍜`, `100.000đ 🚀`, `200.000đ 💎`, `Tuỳ tâm ❤️`) thành `HStack` cố định `.fixedSize()` và `.lineLimit(1)`, chấm dứt hoàn toàn hiện tượng icon nhảy xuống dòng 2 làm xấu nút.
+  - Định dạng số tiền chuẩn tiếng Việt (`formatVND`): `30.000 đ`, `50.000 đ`, `100.000 đ`, `200.000 đ` (không còn dấu phẩy kiểu Mỹ `50,000đ`).
+  - Mở rộng chiều rộng cửa sổ lên `630pt` giúp các ô thông tin tài khoản to rõ, thoáng đãng.
+- **Tải ảnh mã VietQR thực tế chuẩn EMVCo từ máy chủ VietQR (`AsyncImage`)**:
+  - Sử dụng `AsyncImage` nạp trực tiếp mã QR chính thức từ hệ thống VietQR (`img.vietqr.io`), đảm bảo mọi ứng dụng ngân hàng (VPBank, Vietcombank, Techcombank, MB, MoMo...) quét là nhận diện ngay STK `8888071992`, tên `HUỲNH TUẤN HUY` và số tiền chính xác 100%.
+- **Cập nhật đường dẫn GitHub chính thức của dự án**:
+  - Gán chuẩn `https://github.com/lucifer208/MacNAP` (Releases, Issues, Raw manifest).
+
 ### [12:46] feat: redesign App Update Center, separate Auto-Check & Auto-Install toggles & set author VPBank donate
 - **Thiết kế lại toàn diện Trung tâm Cập nhật Ứng dụng (`UpdateSettingsSheetView` trong `AppUpdateAndDonateService.swift`)**:
   - Giao diện trung tâm cập nhật chuẩn macOS: Hiển thị App Icon, phiên bản hiện tại `v1.0.0 (Build 100)`, huy hiệu trạng thái (Bản mới nhất / Đang kiểm tra / Phát hiện bản mới kèm ghi chú phát hành / Đang cài đặt).

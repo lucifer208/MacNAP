@@ -71,7 +71,7 @@ public final class AppUpdaterService: @unchecked Sendable {
         return 100
     }()
 
-    public let remoteManifestURL = URL(string: "https://raw.githubusercontent.com/lu/MacNAP/main/releases/latest.json")!
+    public let remoteManifestURL = URL(string: "https://raw.githubusercontent.com/lucifer208/MacNAP/main/releases/latest.json")!
     public let localManifestURL = URL(fileURLWithPath: "/Users/lu/HUB/MacNAP/releases/latest.json")
 
     public func checkForUpdates() async -> UpdateCheckStatus {
@@ -220,16 +220,17 @@ public struct DonateSheetView: View {
 
     private struct DonationTier: Identifiable {
         let id: Int
-        let label: String
+        let text: String
+        let emoji: String
         let amount: Int
     }
 
     private let tiers: [DonationTier] = [
-        DonationTier(id: 1, label: "30.000đ ☕️", amount: 30000),
-        DonationTier(id: 2, label: "50.000đ 🍜", amount: 50000),
-        DonationTier(id: 3, label: "100.000đ 🚀", amount: 100000),
-        DonationTier(id: 4, label: "200.000đ 💎", amount: 200000),
-        DonationTier(id: 5, label: "Tuỳ tâm ❤️", amount: 0)
+        DonationTier(id: 1, text: "30.000đ", emoji: "☕️", amount: 30000),
+        DonationTier(id: 2, text: "50.000đ", emoji: "🍜", amount: 50000),
+        DonationTier(id: 3, text: "100.000đ", emoji: "🚀", amount: 100000),
+        DonationTier(id: 4, text: "200.000đ", emoji: "💎", amount: 200000),
+        DonationTier(id: 5, text: "Tuỳ tâm", emoji: "❤️", amount: 0)
     ]
 
     public init(state: AppState) {
@@ -250,7 +251,7 @@ public struct DonateSheetView: View {
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .frame(width: 42, height: 42)
+                        .frame(width: 44, height: 44)
                     Image(systemName: "heart.fill")
                         .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(.white)
@@ -267,14 +268,9 @@ public struct DonateSheetView: View {
                             .background(Color.pink.opacity(0.16), in: Capsule())
                             .foregroundStyle(.pink)
                     }
-                    Text(
-                        L.t(
-                            "Nếu MacNAP giúp MacBook của bạn trị dứt điểm chứng tụt pin qua đêm, hãy gửi tặng tác giả 1 ly cà phê nhé!",
-                            "If MacNAP prevents your MacBook battery drain overnight, consider buying the author a coffee!"
-                        )
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    Text(L.t("VPBank: 8888071992 • HUỲNH TUẤN HUY • Quét VietQR tự động điền", "VPBank: 8888071992 • HUYNH TUAN HUY • Scan VietQR to auto-fill"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Spacer()
@@ -291,64 +287,91 @@ public struct DonateSheetView: View {
 
             Divider()
 
-            // Tier Selector Pills
+            // Tier Selector Pills (Text and Emoji strictly on 1 line with fixedSize)
             HStack(spacing: 8) {
                 Text(L.t("Mức ủng hộ:", "Select amount:"))
                     .font(.caption.bold())
                     .foregroundStyle(.secondary)
+                    .fixedSize()
 
                 ForEach(tiers) { tier in
                     Button {
                         selectedAmount = tier.amount
                     } label: {
-                        Text(tier.label)
-                            .font(.system(size: 11.5, weight: .bold, design: .rounded))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(
-                                selectedAmount == tier.amount
-                                    ? Color.pink.opacity(0.22)
-                                    : Color.primary.opacity(0.06),
-                                in: Capsule()
-                            )
-                            .overlay(
-                                Capsule()
-                                    .stroke(selectedAmount == tier.amount ? Color.pink : Color.clear, lineWidth: 1.5)
-                            )
-                            .foregroundStyle(selectedAmount == tier.amount ? .pink : .primary)
+                        HStack(spacing: 4) {
+                            Text(tier.text)
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                            Text(tier.emoji)
+                                .font(.system(size: 13))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            selectedAmount == tier.amount
+                                ? Color.pink.opacity(0.22)
+                                : Color.primary.opacity(0.06),
+                            in: Capsule()
+                        )
+                        .overlay(
+                            Capsule()
+                                .stroke(selectedAmount == tier.amount ? Color.pink : Color.clear, lineWidth: 1.5)
+                        )
+                        .foregroundStyle(selectedAmount == tier.amount ? .pink : .primary)
                     }
                     .buttonStyle(.plain)
+                    .fixedSize()
                 }
 
                 Spacer()
             }
 
-            // Main Content: VietQR code on left + Official Account info on right
-            HStack(alignment: .top, spacing: 16) {
-                // VietQR Code Box
-                VStack(spacing: 6) {
-                    let qrUrl = AuthorDonateInfo.qrURLString(amount: selectedAmount)
-                    if let qrImg = generateQRImage(from: qrUrl) {
-                        Image(nsImage: qrImg)
-                            .interpolation(.none)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 145, height: 145)
-                            .padding(6)
-                            .background(Color.white, in: RoundedRectangle(cornerRadius: 10))
+            // Main Content: Real VietQR image from VietQR server on left + Account info on right
+            HStack(alignment: .top, spacing: 18) {
+                // Real VietQR Box
+                VStack(spacing: 7) {
+                    let qrUrlString = AuthorDonateInfo.qrURLString(amount: selectedAmount)
+                    AsyncImage(url: URL(string: qrUrlString)) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFit()
+                        case .failure:
+                            if let fallback = generateLocalQR(from: qrUrlString) {
+                                Image(nsImage: fallback)
+                                    .resizable()
+                                    .scaledToFit()
+                            } else {
+                                Image(systemName: "qrcode")
+                                    .font(.system(size: 50))
+                                    .foregroundStyle(.secondary)
+                            }
+                        case .empty:
+                            ProgressView()
+                                .frame(width: 155, height: 155)
+                        @unknown default:
+                            EmptyView()
+                        }
                     }
-                    Text(L.t("Mở App Ngân hàng quét VietQR", "Scan VietQR in Banking App"))
-                        .font(.system(size: 10.5, weight: .bold))
-                    Text(selectedAmount > 0 ? "Mức: \(selectedAmount.formatted())đ" : "Tuỳ tâm chuyển khoản")
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.secondary)
+                    .frame(width: 155, height: 155)
+                    .padding(6)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 10))
+
+                    Text(L.t("Quét bằng mọi App Ngân hàng", "Scan with any Banking App"))
+                        .font(.system(size: 11, weight: .bold))
+                        .lineLimit(1)
+
+                    Text(selectedAmount > 0 ? "Số tiền: \(formatVND(selectedAmount))" : L.t("Số tiền: Tuỳ tâm chuyển", "Amount: Custom"))
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(selectedAmount > 0 ? .pink : .secondary)
+                        .lineLimit(1)
                 }
                 .padding(12)
-                .frame(width: 180)
+                .frame(width: 190)
                 .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
 
                 // Account Information Box
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 9) {
                     // Bank Name
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L.t("NGÂN HÀNG THỤ HƯỞNG", "BENEFICIARY BANK"))
@@ -379,7 +402,7 @@ public struct DonateSheetView: View {
                                 .foregroundStyle(.secondary)
                             Spacer()
                             Button {
-                                copyString(AuthorDonateInfo.accountNumber, label: "Số tài khoản VPBank: \(AuthorDonateInfo.accountNumber)")
+                                copyString(AuthorDonateInfo.accountNumber, label: "Số tài khoản: \(AuthorDonateInfo.accountNumber)")
                             } label: {
                                 Label(L.t("Copy STK", "Copy"), systemImage: "doc.on.doc")
                                     .font(.caption2.bold())
@@ -390,7 +413,7 @@ public struct DonateSheetView: View {
                         }
 
                         Text(AuthorDonateInfo.accountNumber)
-                            .font(.system(size: 20, weight: .heavy, design: .monospaced))
+                            .font(.system(size: 21, weight: .heavy, design: .monospaced))
                             .foregroundStyle(.pink)
                     }
                     .padding(8)
@@ -414,31 +437,53 @@ public struct DonateSheetView: View {
                             .controlSize(.mini)
                         }
                         Text(AuthorDonateInfo.accountHolder)
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.system(size: 13.5, weight: .bold))
                             .foregroundStyle(.primary)
                     }
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
 
-                    // Transfer Note
-                    HStack {
+                    // Transfer Note & Amount
+                    HStack(spacing: 8) {
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(L.t("NỘI DUNG CHUYỂN KHOẢN", "TRANSFER NOTE"))
-                                .font(.system(size: 9.5, weight: .bold))
+                            Text(L.t("NỘI DUNG", "TRANSFER NOTE"))
+                                .font(.system(size: 9, weight: .bold))
                                 .foregroundStyle(.secondary)
                             Text(AuthorDonateInfo.defaultNote)
                                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
                         }
-                        Spacer()
+
                         Button {
                             copyString(AuthorDonateInfo.defaultNote, label: "Nội dung chuyển khoản")
                         } label: {
-                            Label(L.t("Copy", "Copy"), systemImage: "doc.on.doc")
+                            Image(systemName: "doc.on.doc")
                                 .font(.caption2)
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.mini)
+
+                        Spacer()
+
+                        if selectedAmount > 0 {
+                            VStack(alignment: .trailing, spacing: 1) {
+                                Text(L.t("SỐ TIỀN", "AMOUNT"))
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.secondary)
+                                Text(formatVND(selectedAmount))
+                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(.pink)
+                            }
+
+                            Button {
+                                copyString("\(selectedAmount)", label: "Số tiền: \(selectedAmount)")
+                            } label: {
+                                Image(systemName: "doc.on.doc")
+                                    .font(.caption2)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.mini)
+                        }
                     }
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -478,7 +523,15 @@ public struct DonateSheetView: View {
             }
         }
         .padding(18)
-        .frame(width: 560)
+        .frame(width: 630)
+    }
+
+    private func formatVND(_ amount: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.groupingSeparator = "."
+        let numStr = formatter.string(from: NSNumber(value: amount)) ?? "\(amount)"
+        return "\(numStr) đ"
     }
 
     private func copyString(_ value: String, label: String) {
@@ -487,7 +540,7 @@ public struct DonateSheetView: View {
         feedbackText = state.l10n.t("Đã copy \(label) vào bộ nhớ tạm!", "Copied \(label) to clipboard!")
     }
 
-    private func generateQRImage(from string: String) -> NSImage? {
+    private func generateLocalQR(from string: String) -> NSImage? {
         let context = CIContext()
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(string.utf8)
@@ -495,7 +548,7 @@ public struct DonateSheetView: View {
         guard let outputImage = filter.outputImage else { return nil }
         let scaled = outputImage.transformed(by: CGAffineTransform(scaleX: 6, y: 6))
         guard let cgImage = context.createCGImage(scaled, from: scaled.extent) else { return nil }
-        return NSImage(cgImage: cgImage, size: NSSize(width: 145, height: 145))
+        return NSImage(cgImage: cgImage, size: NSSize(width: 155, height: 155))
     }
 }
 // MARK: - App Update Center & Settings Sheet View
@@ -503,7 +556,7 @@ public struct UpdateSettingsSheetView: View {
     @ObservedObject var state: AppState
     @Environment(\.dismiss) private var dismiss
 
-    private let githubReleasesURL = "https://github.com/lu/MacNAP/releases"
+    private let githubReleasesURL = "https://github.com/lucifer208/MacNAP/releases"
 
     public init(state: AppState) {
         self.state = state
@@ -757,7 +810,7 @@ public struct ReportIssueSheetView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var copiedLogText: Bool = false
 
-    private let githubIssueURL = "https://github.com/lu/MacNAP/issues/new"
+    private let githubIssueURL = "https://github.com/lucifer208/MacNAP/issues/new"
 
     public init(state: AppState) {
         self.state = state
