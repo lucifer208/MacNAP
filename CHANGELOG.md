@@ -2,6 +2,12 @@
 
 ## [Unreleased] - 2026-10-28
 
+### [10:40] fix: move all pmset & diskutil subprocesses off MainActor to eliminate UI freeze
+- **Triệt tiêu hoàn toàn hiện tượng đơ/freeze app khi đọc `pmset` & `diskutil` (`AppState.swift` & `SleepMountGuardService.swift`)**:
+  - Đưa toàn bộ lệnh `pmset -g log`, `pmset -g assertions`, `diskutil list -plist` và `diskutil mount/unmount` sang `Task.detached(priority: .utility)` chạy ngầm ngoài luồng giao diện (`@MainActor`).
+  - Đổi thứ tự `readDataToEndOfFile()` trước `waitUntilExit()` để tránh kẹt pipe buffer (deadlock) khi output của `pmset` lớn.
+  - Gộp 2 lần gọi `pmset -g log` thành 1 lần duy nhất (`loadAllPmsetLogData`) và thêm trạng thái `ProgressView` ("Đang đọc log...") trên nút bấm.
+
 ### [10:36] feat: use SystemTotal vs DCIn and switch to monochrome SF Symbols & Dock/Menu Bar icons
 - Đổi sang chuẩn đo **System Total** (`SystemEnergyConsumed` ~ 6.8W) và **DC In** (`SystemVoltageIn * SystemCurrentIn` ~ 24.7W).
 - Thay toàn bộ emoji màu (`⚡️`, `🔌`, `🖨️`, `🌙`) và icon màu loè loẹt bằng **SF Symbols đơn sắc (monochrome)** (`bolt.fill`, `powerplug.fill`).

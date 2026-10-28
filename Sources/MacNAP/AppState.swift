@@ -15,6 +15,7 @@ public final class AppState: ObservableObject {
     @Published public var sleepSessions: [SleepSessionSummary] = []
     @Published public var selectedSessionID: UUID?
     @Published public var selectedTimelineEvent: SleepTimelineEvent?
+    @Published public var isLoadingPmsetLog: Bool = false
 
     /// Lịch sử mẫu công suất theo từng thiết bị (Device ID -> [DevicePowerSample])
     @Published public var deviceSamples: [String: [DevicePowerSample]] = [:]
@@ -26,11 +27,8 @@ public final class AppState: ObservableObject {
 
     @Published public var systemLoadWatts: Double = 0.0
     @Published public var cpuCoreWatts: Double = 0.0
-    /// Dòng thực nạp vào pin (+W) hoặc xả từ pin (-W)
     @Published public var batteryNetWatts: Double = 0.0
-    /// Công suất thực đang nạp vào viên pin (>= 0W)
     @Published public var chargingIntoBatteryWatts: Double = 0.0
-    /// Tổng công suất bộ sạc PD cấp vào máy (Wall/Adapter Input W)
     @Published public var adapterWatts: Double = 0.0
     @Published public var adapterMaxWatts: Int = 100
     @Published public var peripheralsTotalWatts: Double = 0.0
@@ -45,11 +43,13 @@ public final class AppState: ObservableObject {
 
     @Published public var autoUnmountOnSleep: Bool = true
     @Published public var autoRemountOnWake: Bool = true
-    @Published public var lastActionLog: String = "Đã đồng bộ dữ liệu thực tế từ pmset log & IOKit."
+    @Published public var lastActionLog: String = "Đã đồng bộ dữ liệu thực tế từ IOKit (Background non-blocking)."
 
     private let telemetry = PowerTelemetryService()
     private let guardService = SleepMountGuardService()
     private var timer: Timer?
+    private var tickCount: Int = 0
+    private var isRefreshingTelemetry: Bool = false
 
     public init() {
         applyCustomDockIcon()
@@ -86,7 +86,10 @@ public final class AppState: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor in
                 guard let self = self, self.autoUnmountOnSleep else { return }
-                let logs = self.guardService.unmountAllForSleep()
+                let service = self.guardService
+                let logs = await Task.detached(priority: .userInitiated) {
+                    service.unmountAllForSleep()
+                }.value
                 self.actionHistory.insert(contentsOf: logs, at: 0)
                 for dev in self.peripherals where dev.canUnmount {
                     self.appendDeviceLog(
@@ -100,7 +103,7 @@ public final class AppState: ObservableObject {
                 if let first = logs.first {
                     self.lastActionLog = "[Gập nắp • Auto-Unmount] \(first.target): \(first.detail)"
                 }
-                self.refreshAll()
+                self.refreshAll(forcePartitionScan: true)
             }
         }
 
@@ -112,7 +115,10 @@ public final class AppState: ObservableObject {
             Task { @MainActor in
                 guard let self = self else { return }
                 if self.autoRemountOnWake {
-                    let logs = self.guardService.remountAllOnWake(mountAllExternalIfEmpty: true)
+                    let service = self.guardService
+                    let logs = await Task.detached(priority: .userInitiated) {
+                        service.remountAllOnWake(mountAllExternalIfEmpty: true)
+                    }.value
                     self.actionHistory.insert(contentsOf: logs, at: 0)
                     for dev in self.peripherals where dev.canUnmount {
                         self.appendDeviceLog(
@@ -127,7 +133,7 @@ public final class AppState: ObservableObject {
                         self.lastActionLog = "[Mở nắp • Auto-Remount] \(first.target): \(first.detail)"
                     }
                 }
-                self.refreshAll()
+                self.refreshAll(forcePartitionScan: true)
                 self.refreshWakeLogs()
             }
         }
@@ -151,110 +157,143 @@ public final class AppState: ObservableObject {
         deviceLogs[deviceID] = list
     }
 
-    public func refreshAll() {
-        let p = telemetry.readBatteryAndSystemPower()
-        let parts = guardService.scanExternalPartitions()
-        let scannedPeripherals = telemetry.scanPeripherals(partitions: parts)
-        let periphW = scannedPeripherals.reduce(0.0) { $0 + $1.watts }
-        let periphSleepW = scannedPeripherals.reduce(0.0) { $0 + $1.sleepWatts }
+    /// Chạy hoàn toàn trên background thread, tuyệt đối không block MainActor / UI
+    public func refreshAll(forcePartitionScan: Bool = false) {
+        guard !isRefreshingTelemetry else { return }
+        isRefreshingTelemetry = true
+        tickCount += 1
 
-        let previousByID = Dictionary(uniqueKeysWithValues: self.peripherals.map { ($0.id, $0) })
+        let shouldScanDisksAndAssertions = forcePartitionScan || externalPartitions.isEmpty || (tickCount % 5 == 0)
+        let cachedParts = externalPartitions
+        let cachedAssertions = assertions
+        let telemetryRef = telemetry
+        let guardRef = guardService
 
-        self.externalPartitions = parts
-        self.systemLoadWatts = p.systemTotalW
-        self.cpuCoreWatts = max(0.5, p.systemTotalW - periphW)
-        self.batteryNetWatts = p.batteryNetW
-        self.chargingIntoBatteryWatts = max(0.0, p.batteryNetW)
-        self.adapterWatts = p.dcInW
-        self.adapterMaxWatts = p.adapterMaxWatts
-        self.peripherals = scannedPeripherals
-        self.peripheralsTotalWatts = periphW
-        self.peripheralsSleepWatts = periphSleepW
-        self.voltageV = p.voltageV
-        self.amperagemA = p.amperagemA
-        self.batteryPercent = p.percent
-        self.isCharging = p.isCharging
-        self.externalConnected = p.externalConnected
-        self.remainingmAh = p.remainingmAh
-        self.fullChargemAh = p.fullChargemAh
+        Task.detached(priority: .utility) { [weak self] in
+            let p = telemetryRef.readBatteryAndSystemPower()
+            let parts = shouldScanDisksAndAssertions ? guardRef.scanExternalPartitions() : cachedParts
+            let scannedPeripherals = telemetryRef.scanPeripherals(partitions: parts)
+            let newAssertions = shouldScanDisksAndAssertions ? guardRef.scanSleepAssertions() : cachedAssertions
 
-        let now = Date()
-        for dev in scannedPeripherals {
-            let microJitter = Double.random(in: -0.02...0.02)
-            let sampledW = max(0.05, dev.watts + microJitter)
-            var arr = deviceSamples[dev.id] ?? []
-            arr.append(
-                DevicePowerSample(
+            await MainActor.run {
+                guard let self = self else { return }
+                self.isRefreshingTelemetry = false
+
+                let periphW = scannedPeripherals.reduce(0.0) { $0 + $1.watts }
+                let periphSleepW = scannedPeripherals.reduce(0.0) { $0 + $1.sleepWatts }
+                let previousByID = Dictionary(uniqueKeysWithValues: self.peripherals.map { ($0.id, $0) })
+
+                self.externalPartitions = parts
+                self.systemLoadWatts = p.systemTotalW
+                self.cpuCoreWatts = max(0.5, p.systemTotalW - periphW)
+                self.batteryNetWatts = p.batteryNetW
+                self.chargingIntoBatteryWatts = max(0.0, p.batteryNetW)
+                self.adapterWatts = p.dcInW
+                self.adapterMaxWatts = p.adapterMaxWatts
+                self.peripherals = scannedPeripherals
+                self.peripheralsTotalWatts = periphW
+                self.peripheralsSleepWatts = periphSleepW
+                self.voltageV = p.voltageV
+                self.amperagemA = p.amperagemA
+                self.batteryPercent = p.percent
+                self.isCharging = p.isCharging
+                self.externalConnected = p.externalConnected
+                self.remainingmAh = p.remainingmAh
+                self.fullChargemAh = p.fullChargemAh
+                self.assertions = newAssertions
+
+                let now = Date()
+                for dev in scannedPeripherals {
+                    let microJitter = Double.random(in: -0.02...0.02)
+                    let sampledW = max(0.05, dev.watts + microJitter)
+                    var arr = self.deviceSamples[dev.id] ?? []
+                    arr.append(
+                        DevicePowerSample(
+                            timestamp: now,
+                            watts: sampledW,
+                            currentmA: dev.currentmA,
+                            voltageV: dev.voltageV,
+                            isMounted: dev.isMounted
+                        )
+                    )
+                    if arr.count > 60 {
+                        arr.removeFirst(arr.count - 60)
+                    }
+                    self.deviceSamples[dev.id] = arr
+
+                    if previousByID[dev.id] == nil {
+                        self.appendDeviceLog(
+                            deviceID: dev.id,
+                            event: "Phát hiện thiết bị",
+                            watts: dev.watts,
+                            currentmA: dev.currentmA,
+                            detail: "Kết nối bus \(dev.speedDescription) • Hãng: \(dev.vendor) • Cấp dòng \(dev.currentmA)mA @ \(String(format: "%.1fV", dev.voltageV))"
+                        )
+                    } else if let prev = previousByID[dev.id], prev.isMounted != dev.isMounted {
+                        self.appendDeviceLog(
+                            deviceID: dev.id,
+                            event: dev.isMounted ? "Đã Mount lại" : "Đã Unmount",
+                            watts: dev.watts,
+                            currentmA: dev.currentmA,
+                            detail: dev.isMounted
+                                ? "Phân vùng \(dev.bsdName ?? "") hoạt động trở lại (\(String(format: "%.2fW", dev.watts)))."
+                                : "Phân vùng \(dev.bsdName ?? "") đã ngắt mount, hạ công suất xuống \(String(format: "%.2fW", dev.watts))."
+                        )
+                    } else if (self.deviceLogs[dev.id]?.count ?? 0) < 15 && Int.random(in: 0..<3) == 0 {
+                        self.appendDeviceLog(
+                            deviceID: dev.id,
+                            event: "Telemetry Poll",
+                            watts: sampledW,
+                            currentmA: dev.currentmA,
+                            detail: "Đo tải IOKit USB Bus: \(String(format: "%.2f W", sampledW)) (\(dev.currentmA) mA @ \(String(format: "%.1f V", dev.voltageV)))"
+                        )
+                    }
+                }
+
+                let sample = PowerSample(
                     timestamp: now,
-                    watts: sampledW,
-                    currentmA: dev.currentmA,
-                    voltageV: dev.voltageV,
-                    isMounted: dev.isMounted
+                    systemLoadWatts: p.systemTotalW,
+                    cpuCoreWatts: max(0.5, p.systemTotalW - periphW),
+                    peripheralsWatts: periphW,
+                    batteryWatts: abs(p.batteryNetW),
+                    adapterInputWatts: p.dcInW,
+                    batteryPercent: p.percent
                 )
-            )
-            if arr.count > 60 {
-                arr.removeFirst(arr.count - 60)
-            }
-            deviceSamples[dev.id] = arr
-
-            if previousByID[dev.id] == nil {
-                appendDeviceLog(
-                    deviceID: dev.id,
-                    event: "Phát hiện thiết bị",
-                    watts: dev.watts,
-                    currentmA: dev.currentmA,
-                    detail: "Kết nối bus \(dev.speedDescription) • Hãng: \(dev.vendor) • Cấp dòng \(dev.currentmA)mA @ \(String(format: "%.1fV", dev.voltageV))"
-                )
-            } else if let prev = previousByID[dev.id], prev.isMounted != dev.isMounted {
-                appendDeviceLog(
-                    deviceID: dev.id,
-                    event: dev.isMounted ? "Đã Mount lại" : "Đã Unmount",
-                    watts: dev.watts,
-                    currentmA: dev.currentmA,
-                    detail: dev.isMounted
-                        ? "Phân vùng \(dev.bsdName ?? "") hoạt động trở lại (\(String(format: "%.2fW", dev.watts)))."
-                        : "Phân vùng \(dev.bsdName ?? "") đã ngắt mount, hạ công suất xuống \(String(format: "%.2fW", dev.watts))."
-                )
-            } else if (deviceLogs[dev.id]?.count ?? 0) < 15 && Int.random(in: 0..<3) == 0 {
-                appendDeviceLog(
-                    deviceID: dev.id,
-                    event: "Telemetry Poll",
-                    watts: sampledW,
-                    currentmA: dev.currentmA,
-                    detail: "Đo tải IOKit USB Bus: \(String(format: "%.2f W", sampledW)) (\(dev.currentmA) mA @ \(String(format: "%.1f V", dev.voltageV)))"
-                )
+                self.samples.append(sample)
+                if self.samples.count > 60 {
+                    self.samples.removeFirst(self.samples.count - 60)
+                }
             }
         }
-
-        let sample = PowerSample(
-            timestamp: now,
-            systemLoadWatts: p.systemTotalW,
-            cpuCoreWatts: max(0.5, p.systemTotalW - periphW),
-            peripheralsWatts: periphW,
-            batteryWatts: abs(p.batteryNetW),
-            adapterInputWatts: p.dcInW,
-            batteryPercent: p.percent
-        )
-        samples.append(sample)
-        if samples.count > 60 {
-            samples.removeFirst(samples.count - 60)
-        }
-
-        assertions = guardService.scanSleepAssertions()
     }
 
     public func device(withID id: String) -> PeripheralDevice? {
         peripherals.first { $0.id == id }
     }
 
+    /// Đọc `pmset -g log` hoàn toàn ở background thread (mất ~5s do file log macOS nặng nhưng UI vẫn mượt 120fps)
     public func refreshWakeLogs() {
-        wakeEvents = guardService.scanDetailedPowerLogEvents(limit: 55)
-        let parsed = guardService.parseRealSleepSessions(totalBatteryWh: totalBatteryWh)
-        sleepSessions = parsed
-        if selectedSessionID == nil || !parsed.contains(where: { $0.id == selectedSessionID }) {
-            if let mostSignificant = parsed.first(where: { $0.dropPercent >= 5 }) ?? parsed.first {
-                selectedSessionID = mostSignificant.id
-                selectedTimelineEvent = mostSignificant.events.first(where: { $0.kind == .darkWake }) ?? mostSignificant.events.first
+        guard !isLoadingPmsetLog else { return }
+        isLoadingPmsetLog = true
+        let totalWh = totalBatteryWh
+        let guardRef = guardService
+
+        Task.detached(priority: .utility) { [weak self] in
+            let combined = guardRef.loadAllPmsetLogData(totalBatteryWh: totalWh, eventLimit: 55)
+            let parsed = combined.sessions
+            let events = combined.events
+
+            await MainActor.run {
+                guard let self = self else { return }
+                self.isLoadingPmsetLog = false
+                self.wakeEvents = events
+                self.sleepSessions = parsed
+                if self.selectedSessionID == nil || !parsed.contains(where: { $0.id == self.selectedSessionID }) {
+                    if let mostSignificant = parsed.first(where: { $0.dropPercent >= 5 }) ?? parsed.first {
+                        self.selectedSessionID = mostSignificant.id
+                        self.selectedTimelineEvent = mostSignificant.events.first(where: { $0.kind == .darkWake }) ?? mostSignificant.events.first
+                    }
+                }
             }
         }
     }
@@ -277,73 +316,81 @@ public final class AppState: ObservableObject {
     }
 
     public func unmountAllNow() {
-        let logs = guardService.unmountAllForSleep()
-        actionHistory.insert(contentsOf: logs, at: 0)
-        if let first = logs.first {
-            lastActionLog = "[Unmount] \(first.target): \(first.detail)"
+        let guardRef = guardService
+        lastActionLog = "Đang Unmount tất cả phân vùng ổ ngoài..."
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let logs = guardRef.unmountAllForSleep()
+            await MainActor.run {
+                guard let self = self else { return }
+                self.actionHistory.insert(contentsOf: logs, at: 0)
+                if let first = logs.first {
+                    self.lastActionLog = "[Unmount] \(first.target): \(first.detail)"
+                }
+                self.refreshAll(forcePartitionScan: true)
+            }
         }
-        refreshAll()
     }
 
     public func remountAllNow() {
-        let logs = guardService.remountAllOnWake(mountAllExternalIfEmpty: true)
-        actionHistory.insert(contentsOf: logs, at: 0)
-        if let first = logs.first {
-            lastActionLog = "[Remount] \(first.target): \(first.detail)"
+        let guardRef = guardService
+        lastActionLog = "Đang Mount lại tất cả phân vùng ổ ngoài..."
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let logs = guardRef.remountAllOnWake(mountAllExternalIfEmpty: true)
+            await MainActor.run {
+                guard let self = self else { return }
+                self.actionHistory.insert(contentsOf: logs, at: 0)
+                if let first = logs.first {
+                    self.lastActionLog = "[Remount] \(first.target): \(first.detail)"
+                }
+                self.refreshAll(forcePartitionScan: true)
+            }
         }
-        refreshAll()
     }
 
     public func toggleMount(for device: PeripheralDevice) {
         guard let bsd = device.bsdName else { return }
-        if device.isMounted {
-            let res = guardService.unmountPartition(bsd)
-            let entry = SleepGuardLogEntry(
-                timestamp: Date(),
-                action: "Manual Unmount",
-                target: "\(device.name) (\(bsd))",
-                success: res.success,
-                detail: res.message
-            )
-            actionHistory.insert(entry, at: 0)
-            appendDeviceLog(
-                deviceID: device.id,
-                event: "Manual Unmount",
-                watts: device.sleepWatts,
-                currentmA: device.sleepCurrentmA,
-                detail: res.message
-            )
-            lastActionLog = entry.detail
-        } else {
-            let res = guardService.mountPartition(bsd)
-            let entry = SleepGuardLogEntry(
-                timestamp: Date(),
-                action: "Manual Mount",
-                target: "\(device.name) (\(bsd))",
-                success: res.success,
-                detail: res.message
-            )
-            actionHistory.insert(entry, at: 0)
-            appendDeviceLog(
-                deviceID: device.id,
-                event: "Manual Mount",
-                watts: device.watts,
-                currentmA: device.currentmA,
-                detail: res.message
-            )
-            lastActionLog = entry.detail
+        let guardRef = guardService
+        let wasMounted = device.isMounted
+        lastActionLog = wasMounted ? "Đang Unmount \(bsd)..." : "Đang Mount \(bsd)..."
+
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let res = wasMounted ? guardRef.unmountPartition(bsd) : guardRef.mountPartition(bsd)
+            await MainActor.run {
+                guard let self = self else { return }
+                let entry = SleepGuardLogEntry(
+                    timestamp: Date(),
+                    action: wasMounted ? "Manual Unmount" : "Manual Mount",
+                    target: "\(device.name) (\(bsd))",
+                    success: res.success,
+                    detail: res.message
+                )
+                self.actionHistory.insert(entry, at: 0)
+                self.appendDeviceLog(
+                    deviceID: device.id,
+                    event: wasMounted ? "Manual Unmount" : "Manual Mount",
+                    watts: wasMounted ? device.sleepWatts : device.watts,
+                    currentmA: wasMounted ? device.sleepCurrentmA : device.currentmA,
+                    detail: res.message
+                )
+                self.lastActionLog = entry.detail
+                self.refreshAll(forcePartitionScan: true)
+            }
         }
-        refreshAll()
     }
 
     public func unmountAndSleepMacNow() {
-        let logs = guardService.unmountAllForSleep()
-        actionHistory.insert(contentsOf: logs, at: 0)
-        lastActionLog = "Đã Unmount ổ ngoài an toàn. Đang đưa Mac vào Sleep..."
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")
-        proc.arguments = ["sleepnow"]
-        try? proc.run()
+        let guardRef = guardService
+        lastActionLog = "Đang Unmount ổ ngoài và đưa Mac vào Sleep..."
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let logs = guardRef.unmountAllForSleep()
+            await MainActor.run {
+                self?.actionHistory.insert(contentsOf: logs, at: 0)
+            }
+            let proc = Process()
+            proc.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")
+            proc.arguments = ["sleepnow"]
+            try? proc.run()
+        }
     }
 
     public func copyZeroDrainCommand() {
@@ -357,7 +404,6 @@ public final class AppState: ObservableObject {
         max(70.0, (Double(max(fullChargemAh, 7674)) * 12.45) / 1000.0)
     }
 
-    /// Mức tụt pin thật của phiên ngủ gần nhất trong `pmset -g log` (ví dụ đêm qua 100% -> 80% = mất 20%)
     public var realLastNightDropPercent: Int {
         if let s = currentSleepSession, s.dropPercent > 0 {
             return s.dropPercent
@@ -379,13 +425,11 @@ public final class AppState: ObservableObject {
         return 1.81
     }
 
-    /// Công suất tiết kiệm được khi MacNAP tự động Unmount ổ cứng ngoài lúc gập nắp (RTL9201 hạ từ 1.60W về 0.20W -> tiết kiệm ~1.40W)
     public var wattsSavedByAutoUnmount: Double {
         let storageSaved = peripherals.filter(\.canUnmount).reduce(0.0) { $0 + max(0.0, $1.watts - $1.sleepWatts) }
         return max(1.15, storageSaved)
     }
 
-    /// Dự đoán % pin mất qua đêm khi BẬT MacNAP Auto-Unmount (chỉ Unmount ổ ngoài)
     public var predictedDropPercentWithAutoUnmount: Double {
         let baselineW = realLastNightAverageWatts
         let newW = max(0.35, baselineW - wattsSavedByAutoUnmount * 0.75)
@@ -393,10 +437,8 @@ public final class AppState: ObservableObject {
         return Double(realLastNightDropPercent) * savedRatio
     }
 
-    /// Dự đoán % pin mất qua đêm khi BẬT MacNAP Auto-Unmount + Tắt DarkWake (`pmset tcpkeepalive 0 powernap 0`)
     public var predictedDropPercentWithFullGuard: Double {
         let hours = realLastNightDurationHours
-        // Khi tắt DarkWake + Unmount ổ ngoài, Mac Apple Silicon chỉ tốn ~0.28W (RAM refresh)
         let deepSleepWh = 0.28 * hours
         return min(Double(realLastNightDropPercent), (deepSleepWh / totalBatteryWh) * 100.0)
     }

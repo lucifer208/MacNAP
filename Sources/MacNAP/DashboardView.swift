@@ -178,9 +178,20 @@ public struct DashboardView: View {
                     .frame(width: 340)
                 }
 
-                Button("Đọc lại pmset log") {
+                Button {
                     state.refreshWakeLogs()
+                } label: {
+                    if state.isLoadingPmsetLog {
+                        HStack(spacing: 4) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Đang đọc log...")
+                        }
+                    } else {
+                        Text("Đọc lại pmset log")
+                    }
                 }
+                .disabled(state.isLoadingPmsetLog)
                 .buttonStyle(.bordered)
                 .controlSize(.small)
             }
@@ -654,9 +665,12 @@ public struct DashboardView: View {
                     Text("Nhật ký Nguồn chi tiết (pmset Power Log)")
                         .font(.headline)
                     Spacer()
-                    Button("Làm mới") {
+                    Button {
                         state.refreshWakeLogs()
+                    } label: {
+                        Text(state.isLoadingPmsetLog ? "Đang tải..." : "Làm mới")
                     }
+                    .disabled(state.isLoadingPmsetLog)
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                 }
