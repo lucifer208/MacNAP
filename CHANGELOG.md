@@ -2,6 +2,16 @@
 
 ## [1.0.1] - 2026-10-28
 
+### [19:46] feat(battery): add realtime app energy watts and battery drain history tab
+- **Soi 'Ma cà rồng hút pin' bằng Watt thực tế (`DashboardView.swift`, `AppState.swift`, `Models.swift`)**:
+  - Tính toán và quy đổi % CPU thành công suất tiêu thụ điện Watt (W) thời gian thực cho từng tiến trình/ứng dụng dựa trên Apple Silicon SMC Watts và trạng thái hoạt động.
+  - Hiển thị danh sách top ứng dụng ngốn pin kèm nhãn "Đang dùng", thanh đo tải công suất, và nút "Buộc dừng" (kill PID) trực tiếp ngay trên Dashboard.
+- **Bổ sung Tab riêng 'Nhật ký Tiêu hao Pin' chi tiết vượt trội Apple Battery Log (`DashboardView.swift`, `AppState.swift`)**:
+  - Ghi nhận lịch sử sụt pin theo từng mức % kèm mốc thời gian chính xác, mức giảm delta %, công suất xả ước tính (Watts).
+  - Tự động bóc tách tác nhân kích hoạt: Thức ngầm DarkWake, Thiết bị ngoại vi USB (`ATC0.USBWakeup`), Wi-Fi ngầm, hoặc bảo trì macOS.
+  - Hỗ trợ bộ lọc nhanh 4 chế độ: `Tất cả`, `Khi dùng Pin`, `Khi Sleep / Gập nắp`, `Tụt nhanh (>10W)` cùng ô tìm kiếm theo tên/tác nhân.
+- **Tự động đóng gói và cập nhật bản dựng `v1.0.1.2610281940`**: Cập nhật file nhị phân, DMG và ZIP.
+
 ### [19:26] fix(ui): deduplicate version displays and redesign popover dropdown to eliminate text truncation
 - **Gom gọn hiển thị Version (chỉ hiện duy nhất 1 lần) (`DashboardView.swift`, `MenuBarPopoverView.swift`)**:
   - Dashboard: Chỉ giữ phiên bản gọn gàng dưới tên MacNAP ở đầu Sidebar. Gỡ bỏ hoàn toàn huy hiệu `Release v...` ở tiêu đề trang, gỡ `v...` ở nhóm Hệ thống, đổi nút Cập nhật thành nhãn ngắn "Đã là bản mới nhất".

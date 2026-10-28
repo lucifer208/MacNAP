@@ -25,6 +25,8 @@ public struct DashboardView: View {
                             overviewContent
                         case .sleepAid:
                             sleepAidContent
+                        case .batteryDrain:
+                            batteryDrainContent
                         case .peripherals:
                             peripheralsContent
                         case .powerLog:
@@ -370,6 +372,333 @@ public struct DashboardView: View {
             }
             peripheralsSection
         }
+    }
+
+    private var batteryDrainContent: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            batteryDrainKpiRow
+            HStack(alignment: .top, spacing: 16) {
+                topEnergyAppsSection
+                    .frame(width: 440)
+                batteryDrainHistorySection
+            }
+        }
+    }
+
+    private var batteryDrainKpiRow: some View {
+        let L = state.l10n
+        let topDrainApp = state.topEnergyApps.first
+        let avgSleepW = state.currentSleepSession?.averageDrainWatts ?? state.realLastNightAverageWatts
+        let lastDrop = state.currentSleepSession?.dropPercent ?? state.realLastNightDropPercent
+
+        return HStack(spacing: 14) {
+            kpiCard(
+                title: L.t("TỐC ĐỘ XẢ PIN / CÔNG SUẤT", "BATTERY DISCHARGE / INFLOW"),
+                mainValue: state.isCharging
+                    ? String(format: "+%.2f W", state.chargingIntoBatteryWatts)
+                    : String(format: "%.2f W", state.systemLoadWatts),
+                badgeText: state.isCharging
+                    ? L.t("Đang sạc", "Charging")
+                    : L.t("Pin \(state.batteryPercent)%", "Bat \(state.batteryPercent)%"),
+                badgeColor: state.isCharging ? .green : .orange,
+                footerLine1: state.isCharging
+                    ? L.t("Củ sạc tối đa: \(state.adapterMaxWatts)W", "Adapter Max: \(state.adapterMaxWatts)W")
+                    : L.t("Dung lượng còn: \(state.batteryPercent)%", "Remaining: \(state.batteryPercent)%"),
+                footerLine2: state.isCharging
+                    ? L.t("Nuôi máy trực tiếp & sạc pin", "Powering Mac & charging")
+                    : L.t("Đang xả trực tiếp từ khối Pin", "Discharging from battery"),
+                icon: "bolt.fill",
+                accent: state.isCharging ? .green : .orange
+            )
+
+            kpiCard(
+                title: L.t("ỨNG DỤNG HÚT PIN NHẤT (W)", "TOP ENERGY CONSUMING APP"),
+                mainValue: topDrainApp?.name ?? L.t("macOS Hệ thống", "macOS System"),
+                badgeText: topDrainApp.map { String(format: "%.2f W", $0.estimatedWatts) } ?? "0.00 W",
+                badgeColor: .red,
+                footerLine1: topDrainApp.map { "PID: \($0.pid) • CPU: \(String(format: "%.1f%%", $0.cpuPercent))" }
+                    ?? L.t("Không có app nào ngốn pin", "No high drain apps"),
+                footerLine2: L.t("Đo theo Apple Silicon SMC Watts", "Calculated via Apple Silicon SMC"),
+                icon: "flame.fill",
+                accent: .red
+            )
+
+            kpiCard(
+                title: L.t("TIÊU HAO KHI SLEEP GẦN NHẤT", "LAST SLEEP BATTERY DRAIN"),
+                mainValue: String(format: "-%d%% Pin", lastDrop),
+                badgeText: String(format: "%.2f W avg", avgSleepW),
+                badgeColor: .indigo,
+                footerLine1: L.t("Ngủ: \(String(format: "%.1f", state.currentSleepSession?.durationHours ?? state.realLastNightDurationHours))h • \(state.currentSleepSession?.darkWakeCount ?? 0) lần DarkWake", "Sleep: \(String(format: "%.1f", state.currentSleepSession?.durationHours ?? state.realLastNightDurationHours))h"),
+                footerLine2: L.t("Tác nhân: Ngoại vi USB & DarkWake", "Cause: USB Peripherals & DarkWake"),
+                icon: "moon.zzz.fill",
+                accent: .indigo
+            )
+
+            kpiCard(
+                title: L.t("NHẬT KÝ TIÊU HAO (CHI TIẾT)", "DETAILED DRAIN HISTORY"),
+                mainValue: L.t("\(state.batteryDrainLogs.count) Sự kiện", "\(state.batteryDrainLogs.count) Events"),
+                badgeText: L.t("Soi hơn Apple", "Beyond Apple"),
+                badgeColor: .cyan,
+                footerLine1: L.t("Ghi nhận từng % pin sụt giảm", "Records every 1% battery drop"),
+                footerLine2: L.t("Phân loại Wake, USB & App ngầm", "Categorized by Wake, USB & Apps"),
+                icon: "chart.xyaxis.line",
+                accent: .cyan
+            )
+        }
+    }
+
+    private var topEnergyAppsSection: some View {
+        let L = state.l10n
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label(L.t("Ma cà rồng hút Pin (Realtime Watts)", "Battery Vampires (Realtime Watts)"), systemImage: "flame.circle.fill")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+
+                Spacer()
+
+                Button {
+                    state.scanTopAppEnergy()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.clockwise")
+                        Text(L.t("Quét", "Scan"))
+                    }
+                    .font(.caption.weight(.medium))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+
+            Text(L.t("Quy đổi CPU % thành công suất Watt thực tế qua Apple Silicon SMC. Có thể buộc dừng ngay app đang cắn trộm pin.",
+                     "Calculates actual process power in Watts via Apple Silicon SMC. Terminate runaway background apps."))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            if state.topEnergyApps.isEmpty {
+                VStack(spacing: 8) {
+                    ProgressView()
+                    Text(L.t("Đang phân tích tiến trình...", "Analyzing processes..."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 280)
+            } else {
+                ScrollView {
+                    VStack(spacing: 8) {
+                        ForEach(state.topEnergyApps) { app in
+                            HStack(spacing: 10) {
+                                Image(systemName: app.isFrontmost ? "app.badge.checkmark.fill" : "app.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(app.isFrontmost ? .blue : .secondary)
+                                    .frame(width: 24, height: 24)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        Text(app.name)
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .lineLimit(1)
+                                        if app.isFrontmost {
+                                            Text(L.t("Đang dùng", "Frontmost"))
+                                                .font(.system(size: 9, weight: .bold))
+                                                .padding(.horizontal, 4)
+                                                .padding(.vertical, 1)
+                                                .background(Color.blue.opacity(0.15), in: RoundedRectangle(cornerRadius: 3))
+                                                .foregroundStyle(.blue)
+                                        }
+                                    }
+                                    HStack(spacing: 6) {
+                                        Text("PID \(app.pid)")
+                                            .font(.caption2.monospacedDigit())
+                                            .foregroundStyle(.secondary)
+                                        Text("•")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                        Text(String(format: "%.1f%% CPU", app.cpuPercent))
+                                            .font(.caption2.monospacedDigit())
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+
+                                Spacer()
+
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    Text(String(format: "%.2f W", app.estimatedWatts))
+                                        .font(.system(size: 13, weight: .bold, design: .rounded).monospacedDigit())
+                                        .foregroundStyle(app.estimatedWatts > 2.5 ? .red : (app.estimatedWatts > 1.0 ? .orange : .primary))
+
+                                    ProgressView(value: min(1.0, app.estimatedWatts / 10.0))
+                                        .progressViewStyle(.linear)
+                                        .frame(width: 60)
+                                        .tint(app.estimatedWatts > 2.5 ? .red : .orange)
+                                }
+
+                                Button {
+                                    state.terminateProcess(pid: app.pid)
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(.red.opacity(0.8))
+                                }
+                                .buttonStyle(.plain)
+                                .help(L.t("Buộc dừng tiến trình này (Kill PID \(app.pid))", "Force terminate PID \(app.pid)"))
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .background(Color(nsColor: .controlBackgroundColor).opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
+                }
+                .frame(maxHeight: 460)
+            }
+        }
+        .padding(16)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var batteryDrainHistorySection: some View {
+        let L = state.l10n
+        let logs = state.filteredBatteryDrainLogs
+
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label(L.t("Nhật ký Tiêu hao Pin Chi tiết", "Battery Drain History Log"), systemImage: "chart.xyaxis.line")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+
+                Spacer()
+
+                Button {
+                    state.loadHistoricalBatteryDrainLogs()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.clockwise")
+                        Text(L.t("Đọc lại pmset", "Reload pmset"))
+                    }
+                    .font(.caption.weight(.medium))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+
+            Text(L.t("Theo dõi chính xác từng lần máy sụt % pin, nhận diện máy bị đánh thức bởi DarkWake hay chạy tốn pin.",
+                     "Detailed battery percentage step-down log with hardware wake causes and estimated power drain."))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            // Filter picker and search
+            HStack(spacing: 10) {
+                Picker("", selection: $state.batteryDrainFilter) {
+                    ForEach(BatteryDrainFilter.allCases) { filter in
+                        Text(L.t(filter.rawValue, filter.rawValue)).tag(filter)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    TextField(L.t("Tìm kiếm...", "Search..."), text: $state.batteryDrainSearchQuery)
+                        .textFieldStyle(.plain)
+                        .font(.caption)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(nsColor: .controlBackgroundColor).opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
+                .frame(maxWidth: 180)
+            }
+
+            if logs.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "battery.100.bolt")
+                        .font(.system(size: 28))
+                        .foregroundStyle(.secondary)
+                    Text(L.t("Chưa có bản ghi tiêu hao nào khớp với bộ lọc.", "No drain log entries match your filter."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 280)
+            } else {
+                ScrollView {
+                    VStack(spacing: 6) {
+                        ForEach(logs) { entry in
+                            HStack(spacing: 12) {
+                                // Time
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(entry.timeLabel)
+                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                    Text(entry.dateLabel)
+                                        .font(.system(size: 9))
+                                        .foregroundStyle(.secondary)
+                                }
+                                .frame(width: 65, alignment: .leading)
+
+                                // Battery % transition
+                                HStack(spacing: 4) {
+                                    Text("\(entry.batteryPercent)%")
+                                        .font(.system(size: 12, weight: .bold, design: .rounded))
+
+                                    if entry.deltaPercent != 0 {
+                                        Text(entry.deltaPercent < 0 ? "\(entry.deltaPercent)%" : "+\(entry.deltaPercent)%")
+                                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                            .foregroundStyle(entry.deltaPercent < 0 ? .red : .green)
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 1)
+                                            .background(
+                                                (entry.deltaPercent < 0 ? Color.red : Color.green).opacity(0.15),
+                                                in: RoundedRectangle(cornerRadius: 3)
+                                            )
+                                    }
+                                }
+                                .frame(width: 80, alignment: .leading)
+
+                                // Watts
+                                Text(String(format: "%.1f W", entry.watts))
+                                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                    .foregroundStyle(entry.isHighDrain ? .red : .secondary)
+                                    .frame(width: 55, alignment: .trailing)
+
+                                // State badge
+                                Text(entry.stateLabel)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        (entry.isSleepEvent ? Color.indigo : (entry.stateLabel.contains("AC") ? Color.green : Color.orange)).opacity(0.15),
+                                        in: RoundedRectangle(cornerRadius: 4)
+                                    )
+                                    .foregroundStyle(entry.isSleepEvent ? .indigo : (entry.stateLabel.contains("AC") ? .green : .orange))
+                                    .frame(width: 110, alignment: .leading)
+
+                                // Culprit / cause
+                                Text(entry.topCulprit)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+
+                                Spacer()
+
+                                if entry.isHighDrain {
+                                    Label(L.t("Hao nhanh", "High drain"), systemImage: "exclamationmark.flame.fill")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(.red)
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 2)
+                                        .background(Color.red.opacity(0.15), in: RoundedRectangle(cornerRadius: 3))
+                                }
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(Color(nsColor: .controlBackgroundColor).opacity(0.4), in: RoundedRectangle(cornerRadius: 6))
+                        }
+                    }
+                }
+                .frame(maxHeight: 460)
+            }
+        }
+        .padding(16)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var powerLogContent: some View {

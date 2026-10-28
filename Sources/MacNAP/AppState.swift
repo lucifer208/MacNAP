@@ -7,6 +7,7 @@ import UserNotifications
 public enum DashboardSection: String, CaseIterable, Identifiable {
     case overview = "Tổng quan & Realtime"
     case sleepAid = "Phân tích Sleep / CloseLid"
+    case batteryDrain = "Nhật ký Tiêu hao Pin"
     case peripherals = "Ngoại vi & Auto-Unmount"
     case powerLog = "Nhật ký Nguồn & Assertions"
 
@@ -16,6 +17,7 @@ public enum DashboardSection: String, CaseIterable, Identifiable {
         switch self {
         case .overview: return "gauge.with.dots.needle.67percent"
         case .sleepAid: return "moon.zzz.fill"
+        case .batteryDrain: return "chart.xyaxis.line"
         case .peripherals: return "externaldrive.connected.to.line.below.fill"
         case .powerLog: return "doc.text.magnifyingglass"
         }
@@ -59,6 +61,13 @@ public final class AppState: ObservableObject {
     @Published public var logSearchQuery: String = ""
     @Published public var appDiagnosticLogs: [AppDiagnosticLogEntry] = []
     @Published public var selectedRightLogMode: Int = 0 // 0 = App Activity & Crash Log, 1 = pmset Power Log
+
+    /// Top các ứng dụng/tiến trình tiêu thụ điện năng thời gian thực tính bằng Watt
+    @Published public var topEnergyApps: [AppProcessEnergyItem] = []
+    /// Nhật ký tiêu hao Pin chi tiết theo thời gian
+    @Published public var batteryDrainLogs: [BatteryDrainLogEntry] = []
+    @Published public var batteryDrainFilter: BatteryDrainFilter = .all
+    @Published public var batteryDrainSearchQuery: String = ""
 
     @Published public var systemLoadWatts: Double = 0.0
     @Published public var cpuCoreWatts: Double = 0.0
@@ -204,6 +213,8 @@ public final class AppState: ObservableObject {
         syncDarkWakeSettingState()
         refreshAll()
         refreshWakeLogs()
+        scanTopAppEnergy()
+        loadHistoricalBatteryDrainLogs()
         if autoCheckUpdateEnabled {
             checkForUpdates(silentIfUpToDate: true)
         }
@@ -629,6 +640,38 @@ public final class AppState: ObservableObject {
                 self.samples.removeFirst(self.samples.count - 60)
             }
 
+            // Ghi nhận biến động Pin theo thời gian thực (Live Battery Drain Log)
+            if self.batteryPercent != p.percent && self.batteryPercent > 0 {
+                let delta = p.percent - self.batteryPercent
+                let df = DateFormatter()
+                df.dateFormat = "HH:mm:ss"
+                let dateF = DateFormatter()
+                dateF.dateFormat = "dd/MM"
+                let topApp = self.topEnergyApps.first?.name ?? "Hoạt động hệ thống"
+                self.batteryDrainLogs.insert(
+                    BatteryDrainLogEntry(
+                        timestamp: Date(),
+                        timeLabel: df.string(from: Date()),
+                        dateLabel: dateF.string(from: Date()),
+                        batteryPercent: p.percent,
+                        deltaPercent: delta,
+                        watts: p.systemTotalW,
+                        stateLabel: p.externalConnected ? "Đang sạc AC" : "Đang dùng Pin",
+                        topCulprit: topApp,
+                        isSleepEvent: false,
+                        isHighDrain: delta <= -2 || p.systemTotalW > 15.0
+                    ),
+                    at: 0
+                )
+                if self.batteryDrainLogs.count > 120 {
+                    self.batteryDrainLogs.removeLast(self.batteryDrainLogs.count - 120)
+                }
+            }
+
+            if self.tickCount % 3 == 0 || self.topEnergyApps.isEmpty {
+                self.scanTopAppEnergy()
+            }
+
             if self.tickCount % 15 == 0 {
                 AppDiagnosticLogger.shared.updateRunningLock(
                     status: String(
@@ -986,6 +1029,232 @@ public final class AppState: ObservableObject {
                 String(format: "Đang dùng Pin (-%.2fW)", max(systemLoadWatts, abs(batteryNetWatts))),
                 String(format: "On Battery (-%.2fW)", max(systemLoadWatts, abs(batteryNetWatts)))
             )
+        }
+    }
+
+    // MARK: - Realtime App Energy & Battery Drain Logs
+
+    public var filteredBatteryDrainLogs: [BatteryDrainLogEntry] {
+        var list = batteryDrainLogs
+        switch batteryDrainFilter {
+        case .all:
+            break
+        case .batteryOnly:
+            list = list.filter { $0.stateLabel.contains("Pin") || $0.deltaPercent < 0 }
+        case .sleepOnly:
+            list = list.filter { $0.isSleepEvent || $0.stateLabel.contains("Sleep") || $0.stateLabel.contains("DarkWake") }
+        case .highDrain:
+            list = list.filter { $0.isHighDrain }
+        }
+        if !batteryDrainSearchQuery.isEmpty {
+            let q = batteryDrainSearchQuery.lowercased()
+            list = list.filter { $0.topCulprit.lowercased().contains(q) || $0.stateLabel.lowercased().contains(q) || "\($0.batteryPercent)".contains(q) }
+        }
+        return list
+    }
+
+    public func scanTopAppEnergy() {
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self = self else { return }
+            let proc = Process()
+            proc.executableURL = URL(fileURLWithPath: "/bin/ps")
+            proc.arguments = ["-A", "-r", "-o", "pid,%cpu,ucomm"]
+            let pipe = Pipe()
+            proc.standardOutput = pipe
+            proc.standardError = pipe
+
+            var lines: [String] = []
+            do {
+                try proc.run()
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                proc.waitUntilExit()
+                if let str = String(data: data, encoding: .utf8) {
+                    lines = str.components(separatedBy: .newlines)
+                }
+            } catch {
+                return
+            }
+
+            guard lines.count > 1 else { return }
+            var rawItems: [(pid: Int, cpu: Double, comm: String)] = []
+            for line in lines.dropFirst() {
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty { continue }
+                let parts = trimmed.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: true)
+                guard parts.count >= 3,
+                      let pid = Int(parts[0]),
+                      let cpu = Double(parts[1]),
+                      cpu > 0.0 else { continue }
+                let comm = String(parts[2]).trimmingCharacters(in: .whitespacesAndNewlines)
+                if comm == "ps" || comm == "grep" { continue }
+                rawItems.append((pid, cpu, comm))
+                if rawItems.count >= 12 { break }
+            }
+
+            let runningApps = await MainActor.run {
+                NSWorkspace.shared.runningApplications
+            }
+            let frontmostPID = await MainActor.run {
+                NSWorkspace.shared.frontmostApplication?.processIdentifier
+            }
+            let currentCpuW = await MainActor.run {
+                max(0.8, self.cpuCoreWatts)
+            }
+
+            let totalSampledCpu = max(1.0, rawItems.reduce(0.0) { $0 + $1.cpu })
+            var result: [AppProcessEnergyItem] = []
+
+            for item in rawItems {
+                let app = runningApps.first(where: { $0.processIdentifier == pid_t(item.pid) })
+                let friendlyName: String
+                if let a = app, let name = a.localizedName, !name.isEmpty {
+                    friendlyName = name
+                } else {
+                    friendlyName = item.comm
+                }
+
+                let cpuRatio = item.cpu / totalSampledCpu
+                let isFront = (frontmostPID == pid_t(item.pid))
+                let estimatedW = (cpuRatio * currentCpuW) + (isFront ? 0.45 : 0.08)
+                let sharePct = max(1, min(100, Int(round((item.cpu / max(100.0, totalSampledCpu)) * 100))))
+
+                result.append(
+                    AppProcessEnergyItem(
+                        pid: item.pid,
+                        name: friendlyName,
+                        rawCommand: item.comm,
+                        cpuPercent: item.cpu,
+                        estimatedWatts: estimatedW,
+                        sharePercent: sharePct,
+                        isFrontmost: isFront,
+                        bundleID: app?.bundleIdentifier
+                    )
+                )
+            }
+
+            let finalApps = result
+            await MainActor.run {
+                self.topEnergyApps = finalApps
+            }
+        }
+    }
+
+    public func terminateProcess(pid: Int) {
+        kill(pid_t(pid), SIGTERM)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.scanTopAppEnergy()
+        }
+    }
+
+    public func loadHistoricalBatteryDrainLogs() {
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self = self else { return }
+            let proc = Process()
+            proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
+            proc.arguments = [
+                "-c",
+                "pmset -g log | grep -E 'Using (Batt|BATT|AC)|DarkWake from|Entering Sleep|Wake from' | tail -n 800"
+            ]
+            let pipe = Pipe()
+            proc.standardOutput = pipe
+            proc.standardError = pipe
+
+            var lines: [String] = []
+            do {
+                try proc.run()
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                proc.waitUntilExit()
+                if let str = String(data: data, encoding: .utf8) {
+                    lines = str.components(separatedBy: .newlines)
+                }
+            } catch {
+                return
+            }
+
+            let df = DateFormatter()
+            df.dateFormat = "yyyy-MM-dd HH:mm:ss Z"
+            df.locale = Locale(identifier: "en_US_POSIX")
+
+            var parsed: [BatteryDrainLogEntry] = []
+            var lastCharge: Int? = nil
+
+            for raw in lines {
+                let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard line.count >= 25 else { continue }
+                let dateStr = String(line.prefix(25))
+                guard let date = df.date(from: dateStr) else { continue }
+
+                var charge: Int?
+                if let range = line.range(of: #"Charge:\s*(\d+)%"#, options: .regularExpression) {
+                    let sub = String(line[range])
+                    charge = Int(sub.filter(\.isNumber))
+                } else if let range2 = line.range(of: #"Charge:\s*(\d+)"#, options: .regularExpression) {
+                    let sub = String(line[range2])
+                    charge = Int(sub.filter(\.isNumber))
+                }
+
+                guard let currentCharge = charge else { continue }
+                let isAC = line.contains("Using AC")
+                let isSleep = line.contains("Sleep") || line.contains("DarkWake")
+                let delta: Int
+                if let prev = lastCharge {
+                    delta = currentCharge - prev
+                } else {
+                    delta = 0
+                }
+                lastCharge = currentCharge
+
+                if delta != 0 || isSleep {
+                    let timeOnly = String(dateStr.dropFirst(11).prefix(8))
+                    let dateOnly = String(dateStr.dropFirst(5).prefix(5))
+
+                    var culprit = "Hoạt động hệ thống"
+                    if line.contains("ATC0.USBWakeup") {
+                        culprit = "Ngoại vi USB (ATC0.USBWakeup)"
+                    } else if line.contains("wifibt") || line.contains("E_RX_IP_PACKET") {
+                        culprit = "Wi-Fi & Gói mạng IP ngầm"
+                    } else if line.contains("SleepService") {
+                        culprit = "Bảo trì ngầm macOS (SleepService)"
+                    } else if line.contains("Clamshell Sleep") {
+                        culprit = "Gập nắp máy (CloseLid)"
+                    } else if line.contains("UserActivity") {
+                        culprit = "Người dùng đánh thức máy"
+                    }
+
+                    let stateText: String
+                    if isAC {
+                        stateText = "Cắm sạc AC"
+                    } else if line.contains("DarkWake") {
+                        stateText = "Thức ngầm DarkWake"
+                    } else if line.contains("Sleep") {
+                        stateText = "Gập nắp Sleep"
+                    } else {
+                        stateText = "Đang dùng Pin"
+                    }
+
+                    let estWatts = isAC ? 0.0 : (delta < 0 ? Double(abs(delta)) * 8.0 : 12.0)
+
+                    parsed.append(
+                        BatteryDrainLogEntry(
+                            timestamp: date,
+                            timeLabel: timeOnly,
+                            dateLabel: dateOnly,
+                            batteryPercent: currentCharge,
+                            deltaPercent: delta,
+                            watts: estWatts,
+                            stateLabel: stateText,
+                            topCulprit: culprit,
+                            isSleepEvent: isSleep,
+                            isHighDrain: delta <= -2 || estWatts > 15.0
+                        )
+                    )
+                }
+            }
+
+            let finalEntries = Array(parsed.reversed().prefix(100))
+            await MainActor.run {
+                self.batteryDrainLogs = finalEntries
+            }
         }
     }
 }

@@ -263,3 +263,39 @@ public struct SleepGuardLogEntry: Identifiable {
     public let success: Bool
     public let detail: String
 }
+
+/// Ứng dụng tiêu thụ điện năng thời gian thực tính theo Watt
+public struct AppProcessEnergyItem: Identifiable, Hashable {
+    public var id: Int { pid }
+    public let pid: Int
+    public let name: String
+    public let rawCommand: String
+    public let cpuPercent: Double
+    public let estimatedWatts: Double
+    public let sharePercent: Int
+    public let isFrontmost: Bool
+    public let bundleID: String?
+}
+
+/// Bộ lọc cho Nhật ký tiêu hao pin
+public enum BatteryDrainFilter: String, CaseIterable, Identifiable {
+    case all = "Tất cả"
+    case batteryOnly = "Khi dùng Pin"
+    case sleepOnly = "Khi Sleep / Gập nắp"
+    case highDrain = "Tụt nhanh (>10W)"
+
+    public var id: String { rawValue }
+}
+public struct BatteryDrainLogEntry: Identifiable, Hashable {
+    public let id = UUID()
+    public let timestamp: Date
+    public let timeLabel: String
+    public let dateLabel: String
+    public let batteryPercent: Int
+    public let deltaPercent: Int
+    public let watts: Double
+    public let stateLabel: String
+    public let topCulprit: String
+    public let isSleepEvent: Bool
+    public let isHighDrain: Bool
+}

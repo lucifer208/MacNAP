@@ -29,6 +29,7 @@ public struct L10n {
         switch section {
         case .overview: return t("Dashboard Tổng quan", "Overview Dashboard")
         case .sleepAid: return t("Phân tích Sleep / CloseLid", "Sleep / CloseLid Timeline")
+        case .batteryDrain: return t("Nhật ký Tiêu hao Pin", "Battery Drain History & Apps")
         case .peripherals: return t("Thiết bị Ngoại vi & USB", "Peripherals & USB")
         case .powerLog: return t("Nhật ký Nguồn (pmset)", "Power Logs & Assertions")
         }
